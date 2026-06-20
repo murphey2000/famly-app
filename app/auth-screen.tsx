@@ -7,7 +7,6 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -69,6 +68,7 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -138,6 +138,7 @@ export default function AuthScreen() {
       return;
     }
 
+    setAuthError(null);
     try {
       setIsLoading(true);
       if (mode === "signin") {
@@ -149,7 +150,7 @@ export default function AuthScreen() {
       }
     } catch (err: any) {
       console.error("[Auth] Email auth error:", err);
-      Alert.alert("Fehler", err?.message || "Anmeldung fehlgeschlagen");
+      setAuthError(err?.message || "Anmeldung fehlgeschlagen");
     } finally {
       setIsLoading(false);
     }
@@ -384,6 +385,23 @@ export default function AuthScreen() {
                 )}
               </View>
 
+              {authError && (
+                <View
+                  style={{
+                    backgroundColor: COLORS.dangerMuted,
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderWidth: 1,
+                    borderColor: COLORS.danger,
+                  }}
+                >
+                  <Text style={{ color: COLORS.danger, fontSize: 14, fontWeight: "500", textAlign: "center" }}>
+                    {authError}
+                  </Text>
+                </View>
+              )}
+
               <AnimatedPressable
                 onPress={handleEmailAuth}
                 disabled={isLoading}
@@ -406,6 +424,7 @@ export default function AuthScreen() {
                   console.log("[Auth] Toggle mode:", mode === "signin" ? "signup" : "signin");
                   setMode(mode === "signin" ? "signup" : "signin");
                   setErrors({});
+                  setAuthError(null);
                 }}
                 style={{ alignItems: "center", paddingVertical: 8 }}
               >
@@ -419,6 +438,7 @@ export default function AuthScreen() {
                   console.log("[Auth] Back to social options");
                   setMode("social");
                   setErrors({});
+                  setAuthError(null);
                 }}
                 style={{ alignItems: "center", paddingVertical: 4 }}
               >

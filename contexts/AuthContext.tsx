@@ -114,23 +114,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithEmail = async (email: string, password: string) => {
-    try {
-      await authClient.signIn.email({ email, password });
-      await fetchUser();
-    } catch (error) {
-      console.error("Email sign in failed:", error);
-      throw error;
+    console.log("[AuthContext] signInWithEmail called for:", email);
+    const { error } = await authClient.signIn.email({ email, password });
+    if (error) {
+      console.error("[AuthContext] signInWithEmail error:", error);
+      throw new Error(error.message || "Anmeldung fehlgeschlagen");
     }
+    console.log("[AuthContext] signInWithEmail success, fetching user");
+    await fetchUser();
   };
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
-    try {
-      await authClient.signUp.email({ email, password, name: name ?? "" });
-      await fetchUser();
-    } catch (error) {
-      console.error("Email sign up failed:", error);
-      throw error;
+    console.log("[AuthContext] signUpWithEmail called for:", email, "name:", name);
+    const { error } = await authClient.signUp.email({ email, password, name: name ?? "" });
+    if (error) {
+      console.error("[AuthContext] signUpWithEmail error:", error);
+      throw new Error(error.message || "Registrierung fehlgeschlagen");
     }
+    console.log("[AuthContext] signUpWithEmail success, fetching user");
+    await fetchUser();
   };
 
   const signInWithSocial = async (provider: "apple" | "google") => {
