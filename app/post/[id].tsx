@@ -1,0 +1,493 @@
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Animated,
+  Alert,
+  Pressable,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image } from "expo-image";
+import { ArrowLeft, Trash2, Tag } from "lucide-react-native";
+import { COLORS } from "@/constants/Colors";
+import { AnimatedPressable } from "@/components/AnimatedPressable";
+import { apiGet, apiDelete } from "@/utils/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatFullDate, formatRelativeDate } from "@/utils/dateUtils";
+
+interface Post {
+  id: string;
+  text: string;
+  ai_title?: string;
+  ai_story?: string;
+  ai_status: "pending" | "processing" | "done" | "failed";
+  tags: string[];
+  created_at: string;
+  date?: string;
+  author: {
+    id: string;
+    name: string;
+    image?: string;
+  };
+  media: Array<{
+    id: string;
+    public_url: string;
+    media_type: string;
+    filename?: string;
+  }>;
+}
+
+function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; height?: number }) {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <View style={{ width, height, borderRadius: height / 2, overflow: "hidden" }}>
+      <Animated.View style={{ flex: 1, backgroundColor: COLORS.surfaceSecondary, opacity }} />
+    </View>
+  );
+}
+
+function ProcessingDots() {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animate = (dot: Animated.Value, delay: number) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.3, duration: 400, useNativeDriver: true }),
+        ])
+      ).start();
+    };
+    animate(dot1, 0);
+    animate(dot2, 200);
+    animate(dot3, 400);
+  }, [dot1, dot2, dot3]);
+
+  const dots = [dot1, dot2, dot3];
+
+  return (
+    <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
+      {dots.map((dot, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: COLORS.primary,
+            opacity: dot,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+export default function PostDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const [post, setPost] = useState<Post | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const loadPost = useCallback(async () => {
+    console.log("[PostDetail] Loading post:", id);
+    try {
+      const data = await apiGet<Post>(`/api/posts/${id}`);
+      console.log("[PostDetail] Post loaded:", data.id, "ai_status:", data.ai_status);
+      setPost(data);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    } catch (err: any) {
+      console.error("[PostDetail] Load error:", err);
+      setError(err?.message || "Beitrag konnte nicht geladen werden");
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadPost();
+  }, [loadPost]);
+
+  // Poll if AI is still processing
+  useEffect(() => {
+    if (!post) return undefined;
+    if (post.ai_status === "processing" || post.ai_status === "pending") {
+      console.log("[PostDetail] AI processing, polling in 3s");
+      const timer = setTimeout(() => loadPost(), 3000);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [post?.ai_status, loadPost]);
+
+  const handleDelete = () => {
+    console.log("[PostDetail] Delete button pressed for post:", id);
+    Alert.alert(
+      "Beitrag löschen",
+      "Möchtest du diesen Moment wirklich löschen? Das kann nicht rückgängig gemacht werden.",
+      [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "Löschen",
+          style: "destructive",
+          onPress: async () => {
+            console.log("[PostDetail] Delete confirmed for post:", id);
+            try {
+              await apiDelete(`/api/posts/${id}`, {});
+              console.log("[PostDetail] Post deleted, navigating back");
+              router.back();
+            } catch (err: any) {
+              console.error("[PostDetail] Delete error:", err);
+              Alert.alert("Fehler", "Beitrag konnte nicht gelöscht werden");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const isAuthor = post?.author?.id === user?.id;
+  const photos = post?.media.filter((m) => m.media_type === "image") || [];
+  const isProcessing = post?.ai_status === "processing" || post?.ai_status === "pending";
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <View
+          style={{
+            paddingTop: insets.top + 12,
+            paddingHorizontal: 20,
+            paddingBottom: 16,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <AnimatedPressable
+            onPress={() => router.back()}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: COLORS.surfaceSecondary,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ArrowLeft size={20} color={COLORS.text} />
+          </AnimatedPressable>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+          <SkeletonLine width="100%" height={240} />
+          <SkeletonLine width="80%" height={28} />
+          <SkeletonLine width="100%" height={14} />
+          <SkeletonLine width="100%" height={14} />
+          <SkeletonLine width="60%" height={14} />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (error || !post) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background, alignItems: "center", justifyContent: "center", padding: 32 }}>
+        <Text style={{ fontSize: 16, color: COLORS.danger, textAlign: "center", marginBottom: 16 }}>
+          {error || "Beitrag nicht gefunden"}
+        </Text>
+        <AnimatedPressable
+          onPress={() => router.back()}
+          style={{
+            backgroundColor: COLORS.primary,
+            borderRadius: 12,
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+          }}
+        >
+          <Text style={{ color: "#FFF", fontWeight: "600" }}>Zurück</Text>
+        </AnimatedPressable>
+      </View>
+    );
+  }
+
+  const postDate = post.date || post.created_at;
+  const displayDate = formatFullDate(postDate);
+  const relativeDate = formatRelativeDate(post.created_at);
+
+  const authorInitials = (post.author.name || "?")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 60 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Hero Photo */}
+          {photos.length > 0 && (
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: photos[selectedPhotoIndex]?.public_url }}
+                style={{ width: "100%", height: 320 }}
+                contentFit="cover"
+              />
+              {/* Gradient overlay */}
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 80,
+                  backgroundColor: "rgba(0,0,0,0.15)",
+                }}
+              />
+            </View>
+          )}
+
+          {/* Back + Delete Header */}
+          <View
+            style={{
+              position: "absolute",
+              top: insets.top + 12,
+              left: 20,
+              right: 20,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[PostDetail] Back button pressed");
+                router.back();
+              }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: photos.length > 0 ? "rgba(0,0,0,0.4)" : COLORS.surfaceSecondary,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <ArrowLeft size={20} color={photos.length > 0 ? "#FFFFFF" : COLORS.text} />
+            </AnimatedPressable>
+
+            {isAuthor && (
+              <AnimatedPressable
+                onPress={handleDelete}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: photos.length > 0 ? "rgba(0,0,0,0.4)" : COLORS.dangerMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Trash2 size={18} color={photos.length > 0 ? "#FFFFFF" : COLORS.danger} />
+              </AnimatedPressable>
+            )}
+          </View>
+
+          {/* Content */}
+          <View style={{ padding: 20, gap: 16 }}>
+            {/* AI Processing State */}
+            {isProcessing && (
+              <View
+                style={{
+                  backgroundColor: COLORS.primaryMuted,
+                  borderRadius: 12,
+                  padding: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <ProcessingDots />
+                <Text style={{ fontSize: 14, color: COLORS.primary, fontWeight: "600" }}>
+                  KI schreibt deine Geschichte...
+                </Text>
+              </View>
+            )}
+
+            {/* Title */}
+            {isProcessing ? (
+              <View style={{ gap: 8 }}>
+                <SkeletonLine width="80%" height={28} />
+                <SkeletonLine width="100%" height={14} />
+                <SkeletonLine width="70%" height={14} />
+              </View>
+            ) : (
+              <Text
+                style={{
+                  fontSize: 26,
+                  fontWeight: "800",
+                  color: COLORS.text,
+                  letterSpacing: -0.4,
+                  lineHeight: 32,
+                }}
+              >
+                {post.ai_title || post.text.slice(0, 80)}
+              </Text>
+            )}
+
+            {/* Author + Date */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              {post.author.image ? (
+                <Image
+                  source={{ uri: post.author.image }}
+                  style={{ width: 36, height: 36, borderRadius: 18 }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: COLORS.primaryMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: COLORS.primary }}>
+                    {authorInitials}
+                  </Text>
+                </View>
+              )}
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: COLORS.text }}>
+                  {post.author.name || "Unbekannt"}
+                </Text>
+                <Text style={{ fontSize: 12, color: COLORS.textTertiary }}>
+                  {displayDate}
+                </Text>
+              </View>
+            </View>
+
+            {/* AI Story */}
+            {!isProcessing && (post.ai_story || post.text) && (
+              <View
+                style={{
+                  backgroundColor: COLORS.surface,
+                  borderRadius: 14,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: COLORS.text,
+                    lineHeight: 26,
+                  }}
+                >
+                  {post.ai_story || post.text}
+                </Text>
+              </View>
+            )}
+
+            {/* Original Text (if AI story exists) */}
+            {!isProcessing && post.ai_story && post.text && (
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: COLORS.textTertiary, marginBottom: 6 }}>
+                  ORIGINAL
+                </Text>
+                <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
+                  {post.text}
+                </Text>
+              </View>
+            )}
+
+            {/* Tags */}
+            {post.tags && post.tags.length > 0 && (
+              <View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <Tag size={14} color={COLORS.textSecondary} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: COLORS.textSecondary }}>
+                    TAGS
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {post.tags.map((tag) => (
+                    <View
+                      key={tag}
+                      style={{
+                        backgroundColor: COLORS.primaryMuted,
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: "600" }}>
+                        {tag}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Photo Grid */}
+            {photos.length > 1 && (
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 10 }}>
+                  ALLE FOTOS ({photos.length})
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {photos.map((photo, i) => (
+                    <AnimatedPressable
+                      key={photo.id}
+                      onPress={() => {
+                        console.log("[PostDetail] Photo selected:", i);
+                        setSelectedPhotoIndex(i);
+                      }}
+                      style={{
+                        width: "31%",
+                        aspectRatio: 1,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        borderWidth: selectedPhotoIndex === i ? 2 : 0,
+                        borderColor: COLORS.primary,
+                      }}
+                    >
+                      <Image
+                        source={{ uri: photo.public_url }}
+                        style={{ width: "100%", height: "100%" }}
+                        contentFit="cover"
+                      />
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </Animated.View>
+    </View>
+  );
+}

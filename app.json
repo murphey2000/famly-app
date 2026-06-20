@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Famly",
+    "slug": "famly",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/app-icon-lnl.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/app-icon-lnl.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.placeholder.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/app-icon-lnl.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.placeholder.app"
+    },
+    "web": {
+      "favicon": "./assets/images/newly.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      "expo-web-browser",
+      "expo-secure-store",
+      "expo-audio"
+    ],
+    "scheme": "famly",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "backendUrl": "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev"
+    }
+  }
+}
