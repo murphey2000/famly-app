@@ -2,6 +2,21 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
+import { getBearerToken } from "@/utils/api";
+
+/** Wait up to `maxMs` for the bearer token to appear in storage. */
+async function waitForToken(maxMs = 3000, intervalMs = 100): Promise<void> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    const token = await getBearerToken();
+    if (token) {
+      console.log("[AuthContext] Bearer token confirmed in storage");
+      return;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  console.warn("[AuthContext] Timed out waiting for bearer token");
+}
 
 interface User {
   id: string;
@@ -122,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     console.log("[AuthContext] signInWithEmail success, fetching user");
     await fetchUser();
+    await waitForToken();
   };
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
@@ -133,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     console.log("[AuthContext] signUpWithEmail success, fetching user");
     await fetchUser();
+    await waitForToken();
   };
 
   const signInWithSocial = async (provider: "apple" | "google") => {

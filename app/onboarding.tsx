@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Users, Plus, Hash } from "lucide-react-native";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { COLORS } from "@/constants/Colors";
-import { apiPost } from "@/utils/api";
+import { authenticatedPost, getBearerToken } from "@/utils/api";
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -45,7 +45,9 @@ export default function OnboardingScreen() {
       setIsLoading(true);
       setError(null);
       console.log("[Onboarding] POST /api/families with name:", familyName.trim());
-      await apiPost("/api/families", { name: familyName.trim() });
+      const token = await getBearerToken();
+      console.log("[Onboarding] Bearer token present:", !!token);
+      await authenticatedPost("/api/families", { name: familyName.trim() });
       console.log("[Onboarding] Family created, navigating to home");
       router.replace("/(tabs)/(home)");
     } catch (err: any) {
@@ -66,7 +68,9 @@ export default function OnboardingScreen() {
       setIsLoading(true);
       setError(null);
       console.log("[Onboarding] POST /api/families/join with code:", inviteCode.trim().toUpperCase());
-      await apiPost("/api/families/join", { invite_code: inviteCode.trim().toUpperCase() });
+      const token = await getBearerToken();
+      console.log("[Onboarding] Bearer token present:", !!token);
+      await authenticatedPost("/api/families/join", { invite_code: inviteCode.trim().toUpperCase() });
       console.log("[Onboarding] Joined family, navigating to home");
       router.replace("/(tabs)/(home)");
     } catch (err: any) {
