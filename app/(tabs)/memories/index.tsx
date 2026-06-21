@@ -3,19 +3,24 @@ import {
   View,
   Text,
   ScrollView,
-  FlatList,
   Animated,
-  Pressable,
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
-import { Clock } from "lucide-react-native";
+import { Clock, Plus } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet } from "@/utils/api";
 import { formatRelativeDate, getYear, getMonthName } from "@/utils/dateUtils";
+import type { ImageSourcePropType } from "react-native";
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: "" };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 interface Post {
   id: string;
@@ -41,6 +46,14 @@ interface TimelineEntry {
   posts: Post[];
 }
 
+const INSPIRATION_CHIPS = [
+  { emoji: "📸", label: "Erster Schultag" },
+  { emoji: "🎂", label: "Geburtstage" },
+  { emoji: "🏖", label: "Familienurlaub" },
+  { emoji: "⚽", label: "Erstes Fußballspiel" },
+  { emoji: "🐶", label: "Neues Haustier" },
+];
+
 function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; height?: number }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
@@ -58,9 +71,108 @@ function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; he
   );
 }
 
+function InspirationChips() {
+  const router = useRouter();
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 16 }}>
+      {INSPIRATION_CHIPS.map((chip) => {
+        const chipLabel = chip.emoji + " " + chip.label;
+        return (
+          <AnimatedPressable
+            key={chip.label}
+            onPress={() => {
+              console.log("[Memories] Inspiration chip pressed:", chip.label);
+              router.push("/post/new");
+            }}
+            style={{
+              backgroundColor: COLORS.surfaceSecondary,
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: "500" }}>
+              {chipLabel}
+            </Text>
+          </AnimatedPressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function EmptyStateNoData() {
+  const router = useRouter();
+  const headline = "✨ Eure Familiengeschichte beginnt hier";
+  const subtitle = "Speichert Fotos, besondere Momente und Erinnerungen, die ihr nie vergessen möchtet.";
+
+  return (
+    <View style={{ alignItems: "center", paddingHorizontal: 32, paddingTop: 60, paddingBottom: 40 }}>
+      <View
+        style={{
+          width: 80,
+          height: 80,
+          borderRadius: 24,
+          backgroundColor: COLORS.primaryMuted,
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 20,
+        }}
+      >
+        <Text style={{ fontSize: 36 }}>📸</Text>
+      </View>
+      <Text
+        style={{
+          fontSize: 20,
+          fontWeight: "700",
+          color: COLORS.text,
+          textAlign: "center",
+          marginBottom: 10,
+          lineHeight: 28,
+        }}
+      >
+        {headline}
+      </Text>
+      <Text
+        style={{
+          fontSize: 15,
+          color: COLORS.textSecondary,
+          textAlign: "center",
+          lineHeight: 22,
+          marginBottom: 28,
+        }}
+      >
+        {subtitle}
+      </Text>
+      <AnimatedPressable
+        onPress={() => {
+          console.log("[Memories] Empty state CTA pressed");
+          router.push("/post/new");
+        }}
+        style={{
+          backgroundColor: COLORS.primary,
+          borderRadius: 14,
+          paddingHorizontal: 24,
+          paddingVertical: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <Plus size={18} color="#FFFFFF" />
+        <Text style={{ color: "#FFFFFF", fontSize: 15, fontWeight: "700" }}>
+          Ersten Moment teilen
+        </Text>
+      </AnimatedPressable>
+      <InspirationChips />
+    </View>
+  );
+}
+
 function PostThumbnail({ post }: { post: Post }) {
   const router = useRouter();
   const photo = post.media.find((m) => m.media_type === "image");
+  const titleText = post.ai_title || post.text.slice(0, 40);
 
   const handlePress = () => {
     console.log("[Memories] Post thumbnail pressed, id:", post.id);
@@ -79,7 +191,7 @@ function PostThumbnail({ post }: { post: Post }) {
       }}
     >
       {photo ? (
-        <Image source={{ uri: photo.public_url }} style={{ width: 100, height: 100 }} contentFit="cover" />
+        <Image source={resolveImageSource(photo.public_url)} style={{ width: 100, height: 100 }} contentFit="cover" />
       ) : (
         <View
           style={{
@@ -90,7 +202,7 @@ function PostThumbnail({ post }: { post: Post }) {
           }}
         >
           <Text style={{ fontSize: 10, color: COLORS.textSecondary, textAlign: "center" }} numberOfLines={3}>
-            {post.ai_title || post.text.slice(0, 40)}
+            {titleText}
           </Text>
         </View>
       )}
@@ -103,6 +215,7 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateX = useRef(new Animated.Value(20)).current;
   const yearsAgo = new Date().getFullYear() - memory.year;
+  const yearsLabel = yearsAgo === 1 ? "Jahr" : "Jahren";
 
   useEffect(() => {
     Animated.parallel([
@@ -113,6 +226,8 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
 
   if (!memory?.post) return null;
   const photo = memory.post.media.find((m) => m.media_type === "image");
+  const cardTitle = memory.post.ai_title || memory.post.text.slice(0, 60);
+  const yearsAgoText = "vor " + yearsAgo + " " + yearsLabel;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateX }] }}>
@@ -133,7 +248,7 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
         }}
       >
         {photo && (
-          <Image source={{ uri: photo.public_url }} style={{ width: 200, height: 120 }} contentFit="cover" />
+          <Image source={resolveImageSource(photo.public_url)} style={{ width: 200, height: 120 }} contentFit="cover" />
         )}
         <View style={{ padding: 12 }}>
           <View
@@ -147,11 +262,11 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
             }}
           >
             <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: "700" }}>
-              vor {yearsAgo} {yearsAgo === 1 ? "Jahr" : "Jahren"}
+              {yearsAgoText}
             </Text>
           </View>
           <Text style={{ fontSize: 14, fontWeight: "600", color: COLORS.text }} numberOfLines={2}>
-            {memory.post.ai_title || memory.post.text.slice(0, 60)}
+            {cardTitle}
           </Text>
         </View>
       </AnimatedPressable>
@@ -162,7 +277,6 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
 export default function MemoriesScreen() {
   const insets = useSafeAreaInsets();
   const [todayMemories, setTodayMemories] = useState<TodayMemory[]>([]);
-  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [availableYears, setAvailableYears] = useState<number[]>([]);
@@ -213,6 +327,10 @@ export default function MemoriesScreen() {
 
   const monthGroups = Object.entries(groupedByMonth).map(([month, posts]) => ({ month, posts }));
 
+  const hasNoPosts = !loading && allPosts.length === 0;
+  const hasPostsButNoneForYear = !loading && allPosts.length > 0 && filteredPosts.length === 0;
+  const noDataText = "Keine Erinnerungen für " + selectedYear;
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <ScrollView
@@ -240,115 +358,121 @@ export default function MemoriesScreen() {
           </Text>
         </View>
 
+        {/* Full empty state — no posts at all */}
+        {hasNoPosts && <EmptyStateNoData />}
+
         {/* Today's Memories */}
-        {loading ? (
-          <View style={{ paddingHorizontal: 20, marginBottom: 24, gap: 8 }}>
-            <SkeletonLine width={160} height={16} />
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <SkeletonLine width={200} height={180} />
-              <SkeletonLine width={200} height={180} />
+        {!hasNoPosts && (
+          loading ? (
+            <View style={{ paddingHorizontal: 20, marginBottom: 24, gap: 8 }}>
+              <SkeletonLine width={160} height={16} />
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <SkeletonLine width={200} height={180} />
+                <SkeletonLine width={200} height={180} />
+              </View>
             </View>
-          </View>
-        ) : todayMemories.length > 0 ? (
-          <View style={{ marginBottom: 28 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginBottom: 12 }}>
-              <Clock size={18} color={COLORS.primary} />
-              <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.text }}>
-                Heute vor X Jahren
-              </Text>
+          ) : todayMemories.length > 0 ? (
+            <View style={{ marginBottom: 28 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginBottom: 12 }}>
+                <Clock size={18} color={COLORS.primary} />
+                <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.text }}>
+                  Heute vor X Jahren
+                </Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 20 }}
+              >
+                {todayMemories.map((memory, i) => (
+                  <MemoryCard key={memory.id} memory={memory} index={i} />
+                ))}
+              </ScrollView>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20 }}
-            >
-              {todayMemories.map((memory, i) => (
-                <MemoryCard key={memory.id} memory={memory} index={i} />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
+          ) : null
+        )}
 
         {/* Year Selector */}
-        {availableYears.length > 0 && (
+        {!hasNoPosts && availableYears.length > 0 && (
           <View style={{ marginBottom: 20 }}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
             >
-              {availableYears.map((year) => (
-                <AnimatedPressable
-                  key={year}
-                  onPress={() => {
-                    console.log("[Memories] Year selected:", year);
-                    setSelectedYear(year);
-                  }}
-                  style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 20,
-                    backgroundColor: selectedYear === year ? COLORS.primary : COLORS.surfaceSecondary,
-                  }}
-                >
-                  <Text
+              {availableYears.map((year) => {
+                const isSelected = selectedYear === year;
+                const chipBg = isSelected ? COLORS.primary : COLORS.surfaceSecondary;
+                const chipColor = isSelected ? "#FFFFFF" : COLORS.textSecondary;
+                return (
+                  <AnimatedPressable
+                    key={year}
+                    onPress={() => {
+                      console.log("[Memories] Year selected:", year);
+                      setSelectedYear(year);
+                    }}
                     style={{
-                      fontSize: 15,
-                      fontWeight: "600",
-                      color: selectedYear === year ? "#FFFFFF" : COLORS.textSecondary,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: chipBg,
                     }}
                   >
-                    {year}
-                  </Text>
-                </AnimatedPressable>
-              ))}
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: chipColor }}>
+                      {year}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
             </ScrollView>
           </View>
         )}
 
         {/* Timeline by Month */}
-        {loading ? (
-          <View style={{ paddingHorizontal: 20, gap: 20 }}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={{ gap: 12 }}>
-                <SkeletonLine width={100} height={16} />
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <SkeletonLine width={100} height={100} />
-                  <SkeletonLine width={100} height={100} />
-                  <SkeletonLine width={100} height={100} />
+        {!hasNoPosts && (
+          loading ? (
+            <View style={{ paddingHorizontal: 20, gap: 20 }}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={{ gap: 12 }}>
+                  <SkeletonLine width={100} height={16} />
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <SkeletonLine width={100} height={100} />
+                    <SkeletonLine width={100} height={100} />
+                    <SkeletonLine width={100} height={100} />
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
-        ) : monthGroups.length > 0 ? (
-          <View style={{ paddingHorizontal: 20, gap: 24 }}>
-            {monthGroups.map(({ month, posts }) => (
-              <View key={month}>
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "700",
-                    color: COLORS.text,
-                    marginBottom: 12,
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {month}
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {posts.map((post) => (
-                    <PostThumbnail key={post.id} post={post} />
-                  ))}
+              ))}
+            </View>
+          ) : monthGroups.length > 0 ? (
+            <View style={{ paddingHorizontal: 20, gap: 24 }}>
+              {monthGroups.map(({ month, posts }) => (
+                <View key={month}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      color: COLORS.text,
+                      marginBottom: 12,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {month}
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {posts.map((post) => (
+                      <PostThumbnail key={post.id} post={post} />
+                    ))}
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 32 }}>
-            <Text style={{ fontSize: 16, color: COLORS.textSecondary, textAlign: "center" }}>
-              Keine Erinnerungen für {selectedYear}
-            </Text>
-          </View>
+              ))}
+            </View>
+          ) : hasPostsButNoneForYear ? (
+            <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 32 }}>
+              <Text style={{ fontSize: 16, color: COLORS.textSecondary, textAlign: "center" }}>
+                {noDataText}
+              </Text>
+            </View>
+          ) : null
         )}
       </ScrollView>
     </View>

@@ -5,7 +5,7 @@ import {
   FlatList,
   Animated,
   RefreshControl,
-  Pressable,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,6 +16,13 @@ import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatRelativeDate } from "@/utils/dateUtils";
+import type { ImageSourcePropType } from "react-native";
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: "" };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 interface Post {
   id: string;
@@ -37,9 +44,17 @@ interface Post {
   }>;
 }
 
+interface FamilyMember {
+  id: string;
+  name: string;
+  image?: string;
+  email?: string;
+}
+
 interface Family {
   id: string;
   name: string;
+  members?: FamilyMember[];
 }
 
 interface TodayMemory {
@@ -47,6 +62,20 @@ interface TodayMemory {
   year: number;
   post: Post;
 }
+
+interface FamilyStats {
+  photos: number;
+  videos: number;
+  memories: number;
+}
+
+const INSPIRATION_CHIPS = [
+  { emoji: "📸", label: "Erster Schultag" },
+  { emoji: "🎂", label: "Geburtstage" },
+  { emoji: "🏖", label: "Familienurlaub" },
+  { emoji: "⚽", label: "Erstes Fußballspiel" },
+  { emoji: "🐶", label: "Neues Haustier" },
+];
 
 function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; height?: number }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
@@ -101,7 +130,7 @@ function PostCardSkeleton() {
   );
 }
 
-function AuthorAvatar({ author }: { author: Post["author"] }) {
+function AuthorAvatar({ author, size = 40 }: { author: { name: string; image?: string }; size?: number }) {
   const initials = (author.name || "?")
     .split(" ")
     .map((n) => n[0])
@@ -112,8 +141,8 @@ function AuthorAvatar({ author }: { author: Post["author"] }) {
   if (author.image) {
     return (
       <Image
-        source={{ uri: author.image }}
-        style={{ width: 40, height: 40, borderRadius: 20 }}
+        source={resolveImageSource(author.image)}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
         contentFit="cover"
       />
     );
@@ -122,18 +151,118 @@ function AuthorAvatar({ author }: { author: Post["author"] }) {
   return (
     <View
       style={{
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
         backgroundColor: COLORS.primaryMuted,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.primary }}>
+      <Text style={{ fontSize: size * 0.35, fontWeight: "700", color: COLORS.primary }}>
         {initials}
       </Text>
     </View>
+  );
+}
+
+function MemberAvatarRow({ members }: { members: FamilyMember[] }) {
+  const visible = members.slice(0, 5);
+  return (
+    <View style={{ flexDirection: "row", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+      {visible.map((member) => {
+        const firstName = member.name.split(" ")[0];
+        return (
+          <View key={member.id} style={{ alignItems: "center", gap: 4 }}>
+            <AuthorAvatar author={member} size={32} />
+            <Text
+              style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: "500", maxWidth: 40 }}
+              numberOfLines={1}
+            >
+              {firstName}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function StatsRow({ stats }: { stats: FamilyStats }) {
+  const photosLabel = "Fotos";
+  const videosLabel = "Videos";
+  const memoriesLabel = "Erinnerungen";
+  const photosCount = String(stats.photos);
+  const videosCount = String(stats.videos);
+  const memoriesCount = String(stats.memories);
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 10, paddingBottom: 4 }}
+      style={{ marginBottom: 16 }}
+    >
+      <View
+        style={{
+          backgroundColor: COLORS.surface,
+          borderRadius: 12,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          alignItems: "center",
+          minWidth: 90,
+        }}
+      >
+        <Text style={{ fontSize: 18 }}>📷</Text>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text, marginTop: 4 }}>
+          {photosCount}
+        </Text>
+        <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+          {photosLabel}
+        </Text>
+      </View>
+
+      <View
+        style={{
+          backgroundColor: COLORS.surface,
+          borderRadius: 12,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          alignItems: "center",
+          minWidth: 90,
+        }}
+      >
+        <Text style={{ fontSize: 18 }}>🎥</Text>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text, marginTop: 4 }}>
+          {videosCount}
+        </Text>
+        <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+          {videosLabel}
+        </Text>
+      </View>
+
+      <View
+        style={{
+          backgroundColor: COLORS.surface,
+          borderRadius: 12,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          alignItems: "center",
+          minWidth: 90,
+        }}
+      >
+        <Text style={{ fontSize: 18 }}>❤️</Text>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text, marginTop: 4 }}>
+          {memoriesCount}
+        </Text>
+        <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+          {memoriesLabel}
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -175,7 +304,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
       >
         {/* Author row */}
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12, gap: 10 }}>
-          <AuthorAvatar author={post.author} />
+          <AuthorAvatar author={post.author} size={40} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 14, fontWeight: "600", color: COLORS.text }}>
               {post.author.name || "Unbekannt"}
@@ -237,7 +366,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
             {photos.slice(0, 3).map((photo, i) => (
               <View key={photo.id} style={{ flex: 1, position: "relative" }}>
                 <Image
-                  source={{ uri: photo.public_url }}
+                  source={resolveImageSource(photo.public_url)}
                   style={{
                     height: photos.length === 1 ? 180 : 100,
                     borderRadius: 10,
@@ -295,6 +424,7 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
   if (!memory?.post) return null;
   const yearsAgo = new Date().getFullYear() - memory.year;
   const photo = memory.post.media.find((m) => m.media_type === "image");
+  const yearsLabel = yearsAgo === 1 ? "Jahr" : "Jahren";
 
   return (
     <AnimatedPressable
@@ -328,7 +458,9 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", fontWeight: "600", marginBottom: 2 }}>
-          Heute vor {yearsAgo} {yearsAgo === 1 ? "Jahr" : "Jahren"}
+          Heute vor {yearsAgo}
+          {" "}
+          {yearsLabel}
         </Text>
         <Text style={{ fontSize: 15, color: "#FFFFFF", fontWeight: "700" }} numberOfLines={1}>
           {memory.post.ai_title || memory.post.text.slice(0, 50)}
@@ -336,7 +468,7 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
       </View>
       {photo && (
         <Image
-          source={{ uri: photo.public_url }}
+          source={resolveImageSource(photo.public_url)}
           style={{ width: 52, height: 52, borderRadius: 10 }}
           contentFit="cover"
         />
@@ -345,8 +477,41 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
   );
 }
 
+function InspirationChips() {
+  const router = useRouter();
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 16 }}>
+      {INSPIRATION_CHIPS.map((chip) => {
+        const chipLabel = chip.emoji + " " + chip.label;
+        return (
+          <AnimatedPressable
+            key={chip.label}
+            onPress={() => {
+              console.log("[Feed] Inspiration chip pressed:", chip.label);
+              router.push("/post/new");
+            }}
+            style={{
+              backgroundColor: COLORS.surfaceSecondary,
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: "500" }}>
+              {chipLabel}
+            </Text>
+          </AnimatedPressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function EmptyState() {
   const router = useRouter();
+  const headline = "✨ Eure Familiengeschichte beginnt hier";
+  const subtitle = "Speichert Fotos, besondere Momente und Erinnerungen, die ihr nie vergessen möchtet.";
+
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingTop: 60 }}>
       <View
@@ -362,11 +527,28 @@ function EmptyState() {
       >
         <Text style={{ fontSize: 36 }}>📸</Text>
       </View>
-      <Text style={{ fontSize: 20, fontWeight: "700", color: COLORS.text, textAlign: "center", marginBottom: 8 }}>
-        Noch keine Erinnerungen
+      <Text
+        style={{
+          fontSize: 20,
+          fontWeight: "700",
+          color: COLORS.text,
+          textAlign: "center",
+          marginBottom: 10,
+          lineHeight: 28,
+        }}
+      >
+        {headline}
       </Text>
-      <Text style={{ fontSize: 15, color: COLORS.textSecondary, textAlign: "center", lineHeight: 22, marginBottom: 28 }}>
-        Teile den ersten Moment mit deiner Familie
+      <Text
+        style={{
+          fontSize: 15,
+          color: COLORS.textSecondary,
+          textAlign: "center",
+          lineHeight: 22,
+          marginBottom: 28,
+        }}
+      >
+        {subtitle}
       </Text>
       <AnimatedPressable
         onPress={() => {
@@ -388,6 +570,7 @@ function EmptyState() {
           Ersten Moment teilen
         </Text>
       </AnimatedPressable>
+      <InspirationChips />
     </View>
   );
 }
@@ -399,6 +582,7 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [family, setFamily] = useState<Family | null>(null);
   const [todayMemory, setTodayMemory] = useState<TodayMemory | null>(null);
+  const [stats, setStats] = useState<FamilyStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -422,6 +606,19 @@ export default function FeedScreen() {
           console.log("[Feed] No family found, redirecting to onboarding");
           router.replace("/onboarding");
           return;
+        }
+
+        // Fetch stats only when we have a family and posts
+        const resolvedPosts = Array.isArray(postsData) ? postsData : [];
+        if (resolvedPosts.length > 0) {
+          apiGet<FamilyStats>("/api/families/stats")
+            .then((s) => {
+              console.log("[Feed] Stats loaded:", s);
+              setStats(s);
+            })
+            .catch(() => {
+              console.log("[Feed] Stats fetch failed, skipping stats row");
+            });
         }
       } else {
         console.log("[Feed] No family data, redirecting to onboarding");
@@ -458,42 +655,26 @@ export default function FeedScreen() {
           paddingTop: insets.top + 12,
           paddingHorizontal: 20,
           paddingBottom: 16,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
         }}
       >
-        <View>
-          <Text style={{ fontSize: 28, fontWeight: "800", color: COLORS.text, letterSpacing: -0.5 }}>
-            Famly
+        <Text style={{ fontSize: 28, fontWeight: "800", color: COLORS.text, letterSpacing: -0.5 }}>
+          Famly
+        </Text>
+        {family && (
+          <Text style={{ fontSize: 14, color: COLORS.textSecondary, fontWeight: "500", marginTop: 2 }}>
+            {family.name}
           </Text>
-          {family && (
-            <Text style={{ fontSize: 14, color: COLORS.textSecondary, fontWeight: "500" }}>
-              {family.name}
-            </Text>
-          )}
-        </View>
-        <AnimatedPressable
-          onPress={() => {
-            console.log("[Feed] FAB pressed, navigating to /post/new");
-            router.push("/post/new");
-          }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: COLORS.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 12px rgba(217, 119, 6, 0.4)",
-          }}
-        >
-          <Plus size={22} color="#FFFFFF" />
-        </AnimatedPressable>
+        )}
+        {family && family.members && family.members.length > 0 && (
+          <MemberAvatarRow members={family.members} />
+        )}
       </View>
 
       {/* Today's Memory Banner */}
       {todayMemory && <MemoryBanner memory={todayMemory} />}
+
+      {/* Stats row — only when posts exist */}
+      {posts.length > 0 && stats && <StatsRow stats={stats} />}
     </View>
   );
 
