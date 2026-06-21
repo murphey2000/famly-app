@@ -39,8 +39,8 @@ interface Post {
   };
   media: Array<{
     id: string;
-    public_url: string;
-    media_type: string;
+    url: string;
+    type: string;
   }>;
 }
 
@@ -279,7 +279,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
   }, []);
 
   const isProcessing = post.ai_status === "processing" || post.ai_status === "pending";
-  const photos = post.media.filter((m) => m.media_type === "image");
+  const photos = post.media.filter((m) => m.type === "photo");
   const relativeDate = formatRelativeDate(post.created_at);
 
   const handlePress = () => {
@@ -366,7 +366,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
             {photos.slice(0, 3).map((photo, i) => (
               <View key={photo.id} style={{ flex: 1, position: "relative" }}>
                 <Image
-                  source={resolveImageSource(photo.public_url)}
+                  source={resolveImageSource(photo.url)}
                   style={{
                     height: photos.length === 1 ? 180 : 100,
                     borderRadius: 10,
@@ -423,7 +423,7 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
   const router = useRouter();
   if (!memory?.post) return null;
   const yearsAgo = new Date().getFullYear() - memory.year;
-  const photo = memory.post.media.find((m) => m.media_type === "image");
+  const photo = memory.post.media.find((m) => m.type === "photo");
   const yearsLabel = yearsAgo === 1 ? "Jahr" : "Jahren";
 
   return (
@@ -468,7 +468,7 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
       </View>
       {photo && (
         <Image
-          source={resolveImageSource(photo.public_url)}
+          source={resolveImageSource(photo.url)}
           style={{ width: 52, height: 52, borderRadius: 10 }}
           contentFit="cover"
         />
