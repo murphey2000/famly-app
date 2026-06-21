@@ -293,6 +293,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
 
 function MemoryBanner({ memory }: { memory: TodayMemory }) {
   const router = useRouter();
+  if (!memory?.post) return null;
   const yearsAgo = new Date().getFullYear() - memory.year;
   const photo = memory.post.media.find((m) => m.media_type === "image");
 
@@ -430,7 +431,7 @@ export default function FeedScreen() {
       }
 
       setPosts(Array.isArray(postsData) ? postsData : []);
-      setTodayMemory(memoryData);
+      setTodayMemory(memoryData?.post ? memoryData : null);
     } catch (err: any) {
       console.error("[Feed] Load error:", err);
       setError("Fehler beim Laden. Bitte versuche es erneut.");
