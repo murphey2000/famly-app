@@ -287,18 +287,23 @@ export default function MemoriesScreen() {
     console.log("[Memories] Loading memories data");
     try {
       const [memoriesData, postsData] = await Promise.all([
-        apiGet<TodayMemory | TodayMemory[]>("/api/memories/today").catch(() => null),
-        apiGet<Post[]>("/api/posts").catch(() => []),
+        apiGet<{ memories: any[] }>("/api/memories/today").catch(() => null),
+        apiGet<{ posts: Post[] } | Post[]>("/api/posts").catch(() => ({ posts: [] })),
       ]);
 
       console.log("[Memories] Data loaded");
 
-      const memories = memoriesData
-        ? (Array.isArray(memoriesData) ? memoriesData : [memoriesData]).filter(m => m?.post)
-        : [];
+      // Backend returns { memories: [rawPost, ...] }; adapt to TodayMemory[].
+      const memories: TodayMemory[] = (memoriesData?.memories ?? []).map((m: any) => ({
+        id: m.id,
+        year: new Date(m.event_date).getFullYear(),
+        post: { ...m, text: m.raw_text ?? "" },
+      }));
       setTodayMemories(memories);
 
-      const posts = Array.isArray(postsData) ? postsData : [];
+      // Backend returns { posts, total }; normalize to an array and map raw_text -> text.
+      const rawPosts = Array.isArray(postsData) ? postsData : postsData?.posts ?? [];
+      const posts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "" }));
       setAllPosts(posts);
 
       const years = [...new Set(posts.map((p) => getYear(p.created_at)))].sort((a, b) => b - a);
