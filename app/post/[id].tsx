@@ -113,7 +113,8 @@ export default function PostDetailScreen() {
     try {
       const data = await apiGet<Post>(`/api/posts/${id}`);
       console.log("[PostDetail] Post loaded:", data.id, "ai_status:", data.ai_status);
-      setPost(data);
+      // Backend stores the body as raw_text; map it to text for display.
+      setPost({ ...data, text: (data as any).raw_text ?? (data as any).text ?? "" });
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     } catch (err: any) {
       console.error("[PostDetail] Load error:", err);
