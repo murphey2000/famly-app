@@ -171,7 +171,7 @@ function MemberAvatarRow({ members }: { members: FamilyMember[] }) {
   return (
     <View style={{ flexDirection: "row", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
       {visible.map((member) => {
-        const firstName = member.name.split(" ")[0];
+        const firstName = (member.name ?? "").split(" ")[0] || "?";
         return (
           <View key={member.id} style={{ alignItems: "center", gap: 4 }}>
             <AuthorAvatar author={member} size={32} />
