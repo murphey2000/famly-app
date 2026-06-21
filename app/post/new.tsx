@@ -146,7 +146,10 @@ export default function NewPostScreen() {
 
     if (Platform.OS === "web") {
       const imageResponse = await fetch(image.uri);
-      const blob = await imageResponse.blob();
+      const rawBlob = await imageResponse.blob();
+      // Reconstruct blob with explicit content type so browser doesn't override the header
+      const blob = new Blob([rawBlob], { type: contentType });
+      console.log("[NewPost] Web upload blob type:", blob.type, "contentType:", contentType);
       const uploadResponse = await fetch(upload_url, {
         method: "PUT",
         body: blob,
