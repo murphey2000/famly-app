@@ -279,7 +279,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
   }, []);
 
   const isProcessing = post.ai_status === "processing" || post.ai_status === "pending";
-  const photos = post.media.filter((m) => m.type === "photo");
+  const photos = (post.media ?? []).filter((m) => m.type === "photo");
   const relativeDate = formatRelativeDate(post.created_at);
 
   const handlePress = () => {
@@ -423,7 +423,7 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
   const router = useRouter();
   if (!memory?.post) return null;
   const yearsAgo = new Date().getFullYear() - memory.year;
-  const photo = memory.post.media.find((m) => m.type === "photo");
+  const photo = (memory.post.media ?? []).find((m) => m.type === "photo");
   const yearsLabel = yearsAgo === 1 ? "Jahr" : "Jahren";
 
   return (
@@ -599,7 +599,7 @@ export default function FeedScreen() {
 
       // Backend returns { posts, total }; normalize to an array and map raw_text -> text.
       const rawPosts = Array.isArray(postsData) ? postsData : postsData?.posts ?? [];
-      const normalizedPosts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "" }));
+      const normalizedPosts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "", media: p.media ?? [] }));
 
       console.log("[Feed] Data loaded - family:", familyData, "posts count:", normalizedPosts.length);
 
@@ -640,7 +640,7 @@ export default function FeedScreen() {
           ? {
               id: firstMem.id,
               year: new Date(firstMem.event_date).getFullYear(),
-              post: { ...firstMem, text: firstMem.raw_text ?? "" },
+              post: { ...firstMem, text: firstMem.raw_text ?? "", media: firstMem.media ?? [] },
             }
           : null
       );
