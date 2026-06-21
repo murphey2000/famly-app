@@ -8,6 +8,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,7 +20,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { X, Camera, Tag, Plus, Trash2, Calendar } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { apiPost, apiGet, BACKEND_URL } from "@/utils/api";
+import { apiPost, apiDelete, apiGet, BACKEND_URL } from "@/utils/api";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -80,6 +82,11 @@ export default function NewPostScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+
+  const [previewState, setPreviewState] = useState<{ postId: string; aiTitle: string; aiStory: string } | null>(null);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [editedStory, setEditedStory] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -183,7 +190,7 @@ export default function NewPostScreen() {
   };
 
   const handleSave = async () => {
-    console.log("[NewPost] Save button pressed");
+    console.log("[NewPost] KI-Story erstellen button pressed");
     if (!text.trim()) {
       Alert.alert("Fehler", "Bitte beschreibe deinen Moment");
       return;
@@ -207,20 +214,61 @@ export default function NewPostScreen() {
         console.log("[NewPost] All images uploaded");
       }
 
-      showToast("Moment gespeichert! KI schreibt deine Geschichte...");
-      setTimeout(() => {
-        console.log("[NewPost] Navigating back to feed");
-        router.replace("/(tabs)/(home)");
-      }, 1500);
+      console.log("[NewPost] POST /api/posts/" + post.id + "/generate-preview");
+      const preview = await apiPost<{ ai_title: string; ai_story: string }>(
+        `/api/posts/${post.id}/generate-preview`,
+        {}
+      );
+      console.log("[NewPost] AI preview received — title:", preview.ai_title?.slice(0, 60));
+
+      setEditedTitle(preview.ai_title);
+      setEditedStory(preview.ai_story);
+      setPreviewState({ postId: post.id, aiTitle: preview.ai_title, aiStory: preview.ai_story });
     } catch (err: any) {
-      console.error("[NewPost] Save error:", err);
+      console.error("[NewPost] Save/generate-preview error:", err);
       Alert.alert("Fehler", err?.message || "Moment konnte nicht gespeichert werden");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleDiscard = async () => {
+    if (!previewState) return;
+    console.log("[NewPost] Verwerfen pressed — deleting draft post:", previewState.postId);
+    try {
+      await apiDelete(`/api/posts/${previewState.postId}`, {});
+      console.log("[NewPost] Draft post deleted:", previewState.postId);
+    } catch (err: any) {
+      console.error("[NewPost] Delete draft error:", err);
+    }
+    setPreviewState(null);
+    router.back();
+  };
+
+  const handlePublish = async () => {
+    if (!previewState) return;
+    console.log("[NewPost] Publizieren pressed — postId:", previewState.postId, "title:", editedTitle.slice(0, 60));
+    try {
+      setIsPublishing(true);
+      console.log("[NewPost] POST /api/posts/" + previewState.postId + "/publish");
+      await apiPost(`/api/posts/${previewState.postId}/publish`, {
+        ai_title: editedTitle,
+        ai_story: editedStory,
+      });
+      console.log("[NewPost] Post published successfully, navigating to feed");
+      setPreviewState(null);
+      router.replace("/(tabs)/(home)");
+    } catch (err: any) {
+      console.error("[NewPost] Publish error:", err);
+      Alert.alert("Fehler", err?.message || "Post konnte nicht veröffentlicht werden");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const formattedDate = format(date, "d. MMMM yyyy", { locale: de });
+
+  const loadingLabel = isLoading ? "KI schreibt deine Geschichte..." : "KI-Story erstellen";
 
   return (
     <KeyboardAvoidingView
@@ -270,8 +318,14 @@ export default function NewPostScreen() {
             borderRadius: 10,
             paddingHorizontal: 16,
             paddingVertical: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
           }}
         >
+          {isLoading && (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          )}
           <Text
             style={{
               color: isLoading || !text.trim() ? COLORS.textTertiary : "#FFFFFF",
@@ -279,7 +333,7 @@ export default function NewPostScreen() {
               fontWeight: "700",
             }}
           >
-            {isLoading ? "Speichern..." : "Speichern"}
+            {loadingLabel}
           </Text>
         </AnimatedPressable>
       </View>
@@ -506,6 +560,154 @@ export default function NewPostScreen() {
       </ScrollView>
 
       <Toast message={toastMessage} visible={toastVisible} />
+
+      {/* AI Story Preview Modal */}
+      <Modal
+        visible={previewState !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          console.log("[NewPost] Preview modal dismissed via back gesture");
+        }}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: COLORS.background }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          {/* Modal Header */}
+          <View
+            style={{
+              paddingTop: insets.top + 12,
+              paddingHorizontal: 16,
+              paddingBottom: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderBottomWidth: 1,
+              borderBottomColor: COLORS.divider,
+              backgroundColor: COLORS.surface,
+            }}
+          >
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[NewPost] Verwerfen button pressed");
+                handleDiscard();
+              }}
+              style={{
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                backgroundColor: COLORS.dangerMuted ?? "#FEE2E2",
+              }}
+            >
+              <Text style={{ color: COLORS.danger, fontSize: 14, fontWeight: "700" }}>
+                ✕ Verwerfen
+              </Text>
+            </AnimatedPressable>
+
+            <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.text }}>
+              KI-Story Vorschau
+            </Text>
+
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[NewPost] Publizieren button pressed");
+                handlePublish();
+              }}
+              disabled={isPublishing}
+              style={{
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                backgroundColor: isPublishing ? COLORS.surfaceSecondary : COLORS.primary,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              {isPublishing && (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              )}
+              <Text
+                style={{
+                  color: isPublishing ? COLORS.textTertiary : "#FFFFFF",
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                {isPublishing ? "Wird veröffentlicht..." : "Publizieren ✓"}
+              </Text>
+            </AnimatedPressable>
+          </View>
+
+          {/* Modal Scrollable Content */}
+          <ScrollView
+            contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Editable Title */}
+            <TextInput
+              value={editedTitle}
+              onChangeText={(val) => {
+                console.log("[NewPost] AI title edited");
+                setEditedTitle(val);
+              }}
+              placeholder="Titel..."
+              placeholderTextColor={COLORS.textTertiary}
+              multiline
+              style={{
+                fontSize: 22,
+                fontWeight: "700",
+                color: COLORS.text,
+                lineHeight: 30,
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Divider */}
+            <View
+              style={{
+                height: 1,
+                backgroundColor: COLORS.divider,
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Editable Story Body */}
+            <TextInput
+              value={editedStory}
+              onChangeText={(val) => {
+                console.log("[NewPost] AI story edited");
+                setEditedStory(val);
+              }}
+              placeholder="Geschichte..."
+              placeholderTextColor={COLORS.textTertiary}
+              multiline
+              textAlignVertical="top"
+              style={{
+                fontSize: 16,
+                color: COLORS.text,
+                lineHeight: 26,
+                minHeight: 200,
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Hint */}
+            <Text
+              style={{
+                fontSize: 13,
+                color: COLORS.textTertiary,
+                textAlign: "center",
+                fontStyle: "italic",
+              }}
+            >
+              Du kannst den Text noch bearbeiten
+            </Text>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
