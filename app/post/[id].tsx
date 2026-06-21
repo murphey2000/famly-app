@@ -33,8 +33,8 @@ interface Post {
   };
   media: Array<{
     id: string;
-    public_url: string;
-    media_type: string;
+    url: string;
+    type: string;
     filename?: string;
   }>;
 }
@@ -165,7 +165,7 @@ export default function PostDetailScreen() {
   };
 
   const isAuthor = post?.author?.id === user?.id;
-  const photos = post?.media.filter((m) => m.media_type === "image") || [];
+  const photos = post?.media.filter((m) => m.type === "photo") || [];
   const isProcessing = post?.ai_status === "processing" || post?.ai_status === "pending";
 
   if (loading) {
@@ -248,7 +248,7 @@ export default function PostDetailScreen() {
           {photos.length > 0 && (
             <View style={{ position: "relative" }}>
               <Image
-                source={{ uri: photos[selectedPhotoIndex]?.public_url }}
+                source={{ uri: photos[selectedPhotoIndex]?.url }}
                 style={{ width: "100%", height: 320 }}
                 contentFit="cover"
               />
@@ -476,7 +476,7 @@ export default function PostDetailScreen() {
                       }}
                     >
                       <Image
-                        source={{ uri: photo.public_url }}
+                        source={{ uri: photo.url }}
                         style={{ width: "100%", height: "100%" }}
                         contentFit="cover"
                       />
