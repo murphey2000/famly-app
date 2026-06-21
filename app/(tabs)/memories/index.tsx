@@ -31,7 +31,7 @@ interface Post {
   tags: string[];
   created_at: string;
   author: { id: string; name: string; image?: string };
-  media: Array<{ id: string; public_url: string; media_type: string }>;
+  media: Array<{ id: string; url: string; type: string }>;
 }
 
 interface TodayMemory {
@@ -171,7 +171,7 @@ function EmptyStateNoData() {
 
 function PostThumbnail({ post }: { post: Post }) {
   const router = useRouter();
-  const photo = post.media.find((m) => m.media_type === "image");
+  const photo = post.media.find((m) => m.type === "photo");
   const titleText = post.ai_title || post.text.slice(0, 40);
 
   const handlePress = () => {
@@ -191,7 +191,7 @@ function PostThumbnail({ post }: { post: Post }) {
       }}
     >
       {photo ? (
-        <Image source={resolveImageSource(photo.public_url)} style={{ width: 100, height: 100 }} contentFit="cover" />
+        <Image source={resolveImageSource(photo.url)} style={{ width: 100, height: 100 }} contentFit="cover" />
       ) : (
         <View
           style={{
@@ -225,7 +225,7 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
   }, []);
 
   if (!memory?.post) return null;
-  const photo = memory.post.media.find((m) => m.media_type === "image");
+  const photo = memory.post.media.find((m) => m.type === "photo");
   const cardTitle = memory.post.ai_title || memory.post.text.slice(0, 60);
   const yearsAgoText = "vor " + yearsAgo + " " + yearsLabel;
 
@@ -248,7 +248,7 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
         }}
       >
         {photo && (
-          <Image source={resolveImageSource(photo.public_url)} style={{ width: 200, height: 120 }} contentFit="cover" />
+          <Image source={resolveImageSource(photo.url)} style={{ width: 200, height: 120 }} contentFit="cover" />
         )}
         <View style={{ padding: 12 }}>
           <View
