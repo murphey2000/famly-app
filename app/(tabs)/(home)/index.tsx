@@ -593,11 +593,15 @@ export default function FeedScreen() {
       setError(null);
       const [familyData, postsData, memoryData] = await Promise.all([
         apiGet<Family | Family[]>("/api/families").catch(() => null),
-        apiGet<Post[]>("/api/posts").catch(() => []),
-        apiGet<TodayMemory>("/api/memories/today").catch(() => null),
+        apiGet<{ posts: Post[] } | Post[]>("/api/posts").catch(() => ({ posts: [] })),
+        apiGet<{ memories: any[] }>("/api/memories/today").catch(() => null),
       ]);
 
-      console.log("[Feed] Data loaded - family:", familyData, "posts count:", Array.isArray(postsData) ? postsData.length : 0);
+      // Backend returns { posts, total }; normalize to an array and map raw_text -> text.
+      const rawPosts = Array.isArray(postsData) ? postsData : postsData?.posts ?? [];
+      const normalizedPosts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "" }));
+
+      console.log("[Feed] Data loaded - family:", familyData, "posts count:", normalizedPosts.length);
 
       if (familyData) {
         const fam = Array.isArray(familyData) ? familyData[0] : familyData;
@@ -609,7 +613,7 @@ export default function FeedScreen() {
         }
 
         // Fetch stats only when we have a family and posts
-        const resolvedPosts = Array.isArray(postsData) ? postsData : [];
+        const resolvedPosts = normalizedPosts;
         if (resolvedPosts.length > 0) {
           apiGet<FamilyStats>("/api/families/stats")
             .then((s) => {
@@ -626,8 +630,20 @@ export default function FeedScreen() {
         return;
       }
 
-      setPosts(Array.isArray(postsData) ? postsData : []);
-      setTodayMemory(memoryData?.post ? memoryData : null);
+      setPosts(normalizedPosts);
+
+      // Backend returns { memories: [rawPost, ...] }; adapt the first one to a TodayMemory.
+      const memList = memoryData?.memories ?? [];
+      const firstMem = memList[0];
+      setTodayMemory(
+        firstMem
+          ? {
+              id: firstMem.id,
+              year: new Date(firstMem.event_date).getFullYear(),
+              post: { ...firstMem, text: firstMem.raw_text ?? "" },
+            }
+          : null
+      );
     } catch (err: any) {
       console.error("[Feed] Load error:", err);
       setError("Fehler beim Laden. Bitte versuche es erneut.");
