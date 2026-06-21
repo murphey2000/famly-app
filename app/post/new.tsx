@@ -13,11 +13,12 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { X, Camera, Tag, Plus, Trash2, Calendar } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { apiPost, apiGet, getBearerToken, BACKEND_URL } from "@/utils/api";
+import { apiPost, apiGet, BACKEND_URL } from "@/utils/api";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -141,18 +142,14 @@ export default function NewPostScreen() {
     );
 
     console.log("[NewPost] Uploading image to:", upload_url);
-    const token = await getBearerToken();
-    const imageResponse = await fetch(image.uri);
-    const blob = await imageResponse.blob();
-
-    const uploadResponse = await fetch(upload_url, {
-      method: "PUT",
-      body: blob,
+    const uploadResult = await FileSystem.uploadAsync(upload_url, image.uri, {
+      httpMethod: "PUT",
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
       headers: { "Content-Type": contentType },
     });
 
-    if (!uploadResponse.ok) {
-      throw new Error(`Upload failed: ${uploadResponse.status}`);
+    if (uploadResult.status < 200 || uploadResult.status >= 300) {
+      throw new Error(`Upload failed: ${uploadResult.status}`);
     }
 
     console.log("[NewPost] Image uploaded, registering media for post:", postId);
