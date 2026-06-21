@@ -7,6 +7,7 @@ describe("API Integration Tests", () => {
   let userId: string;
   let familyId: string;
   let postId: string;
+  let secondPostId: string; // For testing error cases that don't require post deletion
 
   // Auth setup
   test("Sign up test user", async () => {
@@ -73,6 +74,18 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     postId = data.id;
     expect(postId).toBeDefined();
+  });
+
+  test("Create a second post for error case testing", async () => {
+    const res = await authenticatedApi("/api/posts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Second test post", tags: ["test"] }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    secondPostId = data.id;
+    expect(secondPostId).toBeDefined();
   });
 
   test("Create a post without auth returns 401", async () => {
@@ -317,7 +330,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  // Posts - Publish
+  // Posts - Publish (main flow)
   test("Publish a post", async () => {
     const res = await authenticatedApi(
       `/api/posts/${postId}/publish`,
@@ -337,9 +350,10 @@ describe("API Integration Tests", () => {
     expect(data.ai_status).toBeDefined();
   });
 
+  // Posts - Publish error cases (using separate post)
   test("Publish post with missing ai_title returns 400", async () => {
     const res = await authenticatedApi(
-      `/api/posts/${postId}/publish`,
+      `/api/posts/${secondPostId}/publish`,
       authToken,
       {
         method: "POST",
@@ -354,7 +368,7 @@ describe("API Integration Tests", () => {
 
   test("Publish post with missing ai_story returns 400", async () => {
     const res = await authenticatedApi(
-      `/api/posts/${postId}/publish`,
+      `/api/posts/${secondPostId}/publish`,
       authToken,
       {
         method: "POST",
@@ -424,7 +438,7 @@ describe("API Integration Tests", () => {
 
   test("Delete post without auth returns 401", async () => {
     const res = await api(
-      `/api/posts/${postId}`,
+      `/api/posts/${secondPostId}`,
       {
         method: "DELETE",
       }

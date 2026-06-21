@@ -396,20 +396,13 @@ export function registerPostsRoutes(app: App) {
             ? new Date(post[0].event_date).toISOString().split('T')[0]
             : '';
 
-          const userPrompt = `Du bist ein Familienchronik-Assistent. Erstelle aus diesem Familien-Moment einen kurzen, persönlichen und emotionalen Text.
+          const userPrompt = `Du erhältst einzelne Erinnerungen als Stichworte. Erstelle daraus einen kurzen, persönlichen Text von 40–100 Wörtern. Verwende ausschließlich die angegebenen Informationen. Ergänze keine neuen Ereignisse. Fasse ähnliche Ereignisse zusammen und schreibe in einem warmen familiären Ton.
 
-Rohtext: ${post[0].raw_text || ''}
+Stichworte: ${post[0].raw_text || ''}
 Datum: ${eventDate}
 
-WICHTIG:
-- Maximal 160 Zeichen (strikt einhalten!)
-- Persönlich und warm, wie ein Familienmitglied schreiben würde
-- Keine generischen Floskeln
-- Wenn ein Bild vorhanden ist, beziehe dich darauf
-- Auf Deutsch
-
 Antworte NUR mit einem JSON-Objekt:
-{"title": "Kurzer Titel (max 40 Zeichen)", "story": "Kurzer persönlicher Text (max 160 Zeichen)"}`;
+{"title": "Kurzer Titel (max 40 Zeichen)", "story": "Text (40–100 Wörter, max 160 Zeichen)"}`;
 
           // Find first image media if available
           const imageMedia = mediaRows.find((m) => m.type === 'image');
