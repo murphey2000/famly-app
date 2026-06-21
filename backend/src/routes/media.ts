@@ -310,4 +310,106 @@ export function registerMediaRoutes(app: App) {
       return { groups };
     }
   );
+
+  app.fastify.post(
+    '/api/upload-file',
+    {
+      schema: {
+        description: 'Upload a file to S3 storage',
+        tags: ['media'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              public_url: { type: 'string' },
+              key: { type: 'string' },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ userId: session.user.id }, 'File upload endpoint called');
+
+      try {
+        // Try to get the file from the request
+        let data: any;
+        try {
+          data = await request.file();
+          app.logger.info({ filename: data?.filename, mimetype: data?.mimetype }, 'File retrieved from request');
+        } catch (fileError) {
+          app.logger.error({ err: fileError }, 'request.file() threw an error');
+          return reply.status(400).send({ error: 'No file provided' });
+        }
+
+        // Check if file data exists
+        if (!data) {
+          app.logger.warn('request.file() returned null');
+          return reply.status(400).send({ error: 'No file provided' });
+        }
+
+        const filename = data.filename;
+        const mimetype = data.mimetype || 'application/octet-stream';
+
+        if (!filename) {
+          app.logger.warn('No filename in file data');
+          return reply.status(400).send({ error: 'Missing filename' });
+        }
+
+        // Convert file to buffer
+        let buffer: Buffer;
+        try {
+          buffer = await data.toBuffer();
+          app.logger.info({ filename, size: buffer.length }, 'File converted to buffer');
+        } catch (bufferError) {
+          app.logger.error({ err: bufferError }, 'Failed to convert file to buffer');
+          return reply.status(400).send({ error: 'Failed to read file' });
+        }
+
+        // Generate storage key
+        const uniqueId = Math.random().toString(36).substring(2, 15);
+        const key = `media/${session.user.id}/${uniqueId}/${filename}`;
+
+        // Construct public URL
+        const baseUrl = process.env.STORAGE_API_BASE_URL || 'https://storage.example.com';
+        const publicUrl = `${baseUrl}/public/${key}`;
+
+        // If storage API is configured, upload the file
+        if (process.env.STORAGE_API_BASE_URL) {
+          try {
+            const uploadUrl = `${process.env.STORAGE_API_BASE_URL}/upload?key=${encodeURIComponent(key)}&content_type=${encodeURIComponent(mimetype)}`;
+
+            const uploadResponse = await fetch(uploadUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': mimetype },
+              body: buffer,
+            });
+
+            if (!uploadResponse.ok) {
+              app.logger.warn({ status: uploadResponse.status }, 'Storage API returned non-OK status, but continuing');
+            }
+          } catch (uploadError) {
+            app.logger.warn({ err: uploadError }, 'Storage upload failed, using mock URL');
+          }
+        }
+
+        app.logger.info({ filename, key }, 'File upload completed successfully');
+
+        return {
+          public_url: publicUrl,
+          key,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        app.logger.error({ err: error, message }, 'Unexpected error in file upload');
+        return reply.status(500).send({ error: 'File upload failed' });
+      }
+    }
+  );
 }

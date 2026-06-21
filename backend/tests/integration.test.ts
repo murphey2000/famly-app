@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { authenticatedApi, signUpTestUser, expectStatus } from "./helpers";
+import { api, authenticatedApi, signUpTestUser, expectStatus, createTestFile } from "./helpers";
 
 describe("API Integration Tests", () => {
   // Shared state for chaining tests
@@ -259,6 +259,39 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 401);
+  });
+
+  // Upload file
+  test("Upload a file to S3 storage", async () => {
+    const form = new FormData();
+    form.append("file", createTestFile("test-upload.jpg", "test file content", "image/jpeg"));
+    const res = await authenticatedApi("/api/upload-file", authToken, {
+      method: "POST",
+      body: form,
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.public_url).toBeDefined();
+    expect(data.key).toBeDefined();
+  });
+
+  test("Upload file without auth returns 401", async () => {
+    const form = new FormData();
+    form.append("file", createTestFile("test-upload.jpg", "test file content", "image/jpeg"));
+    const res = await api("/api/upload-file", {
+      method: "POST",
+      body: form,
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Upload file without file returns 400", async () => {
+    const form = new FormData();
+    const res = await authenticatedApi("/api/upload-file", authToken, {
+      method: "POST",
+      body: form,
+    });
+    await expectStatus(res, 400);
   });
 
   // Posts - Generate preview
