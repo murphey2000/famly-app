@@ -171,7 +171,7 @@ function EmptyStateNoData() {
 
 function PostThumbnail({ post }: { post: Post }) {
   const router = useRouter();
-  const photo = post.media.find((m) => m.type === "photo");
+  const photo = (post.media ?? []).find((m) => m.type === "photo");
   const titleText = post.ai_title || post.text.slice(0, 40);
 
   const handlePress = () => {
@@ -225,7 +225,7 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
   }, []);
 
   if (!memory?.post) return null;
-  const photo = memory.post.media.find((m) => m.type === "photo");
+  const photo = (memory.post.media ?? []).find((m) => m.type === "photo");
   const cardTitle = memory.post.ai_title || memory.post.text.slice(0, 60);
   const yearsAgoText = "vor " + yearsAgo + " " + yearsLabel;
 
@@ -297,13 +297,13 @@ export default function MemoriesScreen() {
       const memories: TodayMemory[] = (memoriesData?.memories ?? []).map((m: any) => ({
         id: m.id,
         year: new Date(m.event_date).getFullYear(),
-        post: { ...m, text: m.raw_text ?? "" },
+        post: { ...m, text: m.raw_text ?? "", media: m.media ?? [] },
       }));
       setTodayMemories(memories);
 
       // Backend returns { posts, total }; normalize to an array and map raw_text -> text.
       const rawPosts = Array.isArray(postsData) ? postsData : postsData?.posts ?? [];
-      const posts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "" }));
+      const posts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "", media: p.media ?? [] }));
       setAllPosts(posts);
 
       const years = [...new Set(posts.map((p) => getYear(p.created_at)))].sort((a, b) => b - a);
