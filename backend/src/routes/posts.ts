@@ -396,13 +396,13 @@ export function registerPostsRoutes(app: App) {
             ? new Date(post[0].event_date).toISOString().split('T')[0]
             : '';
 
-          const userPrompt = `Du erhältst einzelne Erinnerungen als Stichworte. Erstelle daraus einen kurzen, persönlichen Text von 40–100 Wörtern. Verwende ausschließlich die angegebenen Informationen. Ergänze keine neuen Ereignisse. Fasse ähnliche Ereignisse zusammen und schreibe in einem warmen familiären Ton.
+          const userPrompt = `Du erhältst einzelne Erinnerungen als Stichworte. Erstelle daraus einen kurzen, persönlichen Text von max. 60 Wörtern. Verwende ausschließlich die angegebenen Informationen. Ergänze keine neuen Ereignisse. Schreibe in einem warmen, familiären Ton.
 
 Stichworte: ${post[0].raw_text || ''}
 Datum: ${eventDate}
 
-Antworte NUR mit einem JSON-Objekt:
-{"title": "Kurzer Titel (max 40 Zeichen)", "story": "Text (40–100 Wörter, max 160 Zeichen)"}`;
+Antworte NUR mit einem JSON-Objekt (kein Markdown, keine Code-Blöcke):
+{"title": "Kurzer Titel (max 40 Zeichen)", "story": "Text (max. 60 Wörter)"}`;
 
           // Find first image media if available
           const imageMedia = mediaRows.find((m) => m.type === 'image');
@@ -411,9 +411,8 @@ Antworte NUR mit einem JSON-Objekt:
           const messageContent: any[] = [];
           if (imageMedia && imageMedia.url) {
             messageContent.push({
-              type: 'image',
-              source: {
-                type: 'url',
+              type: 'image_url',
+              image_url: {
                 url: imageMedia.url,
               },
             });
@@ -448,11 +447,16 @@ Antworte NUR mit einem JSON-Objekt:
 
           const data = await response.json() as { choices: Array<{ message: { content: string } }> };
           const content = data.choices[0].message.content;
-          const parsed = JSON.parse(content);
+          app.logger.info({ postId: request.params.id, rawContent: content.slice(0, 500) }, 'Raw AI response');
+          // Strip markdown code fences if present
+          const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+          const parsed = JSON.parse(cleaned);
 
           // Enforce length limits
           aiTitle = (parsed.title || 'Mein Moment').substring(0, 40);
-          aiStory = (parsed.story || post[0].raw_text || '').substring(0, 160);
+          const storyRaw = parsed.story || post[0].raw_text || '';
+          const storyWords = storyRaw.trim().split(/\s+/);
+          aiStory = storyWords.slice(0, 60).join(' ');
 
           app.logger.info({ postId: request.params.id, titleLen: aiTitle.length, storyLen: aiStory.length }, 'Preview generated successfully');
         } catch (error) {

@@ -226,6 +226,18 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Add media without auth returns 401", async () => {
+    const res = await api(`/api/posts/${postId}/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "photo",
+        url: "https://example.com/photo.jpg",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // Upload URL
   test("Get signed upload URL", async () => {
     const res = await authenticatedApi("/api/upload-url", authToken, {
@@ -449,6 +461,15 @@ describe("API Integration Tests", () => {
       { method: "DELETE" }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete post with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid",
+      authToken,
+      { method: "DELETE" }
+    );
+    await expectStatus(res, 400);
   });
 
   test("Delete post without auth returns 401", async () => {
