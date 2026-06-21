@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, count } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 
@@ -250,6 +250,81 @@ export function registerFamiliesRoutes(app: App) {
       app.logger.info({ familyId: family.id, userId: session.user.id }, 'User joined family');
 
       return family;
+    }
+  );
+
+  app.fastify.get(
+    '/api/families/stats',
+    {
+      schema: {
+        description: 'Get family statistics (photo, video, and memory counts)',
+        tags: ['families'],
+        response: {
+          200: {
+            description: 'Family statistics',
+            type: 'object',
+            properties: {
+              photos: { type: 'integer' },
+              videos: { type: 'integer' },
+              memories: { type: 'integer' },
+            },
+          },
+          401: {
+            type: 'object',
+            properties: { error: { type: 'string' } },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ userId: session.user.id }, 'Fetching family stats');
+
+      const familyMember = await app.db
+        .select()
+        .from(schema.family_members)
+        .where(eq(schema.family_members.user_id, session.user.id))
+        .limit(1);
+
+      if (!familyMember.length) {
+        app.logger.info({ userId: session.user.id }, 'User has no family, returning zero stats');
+        return {
+          photos: 0,
+          videos: 0,
+          memories: 0,
+        };
+      }
+
+      const familyId = familyMember[0].family_id;
+
+      const photoCount = await app.db
+        .select({ count: count() })
+        .from(schema.media)
+        .where(eq(schema.media.family_id, familyId) && eq(schema.media.type, 'image'));
+
+      const videoCount = await app.db
+        .select({ count: count() })
+        .from(schema.media)
+        .where(eq(schema.media.family_id, familyId) && eq(schema.media.type, 'video'));
+
+      const memoryCount = await app.db
+        .select({ count: count() })
+        .from(schema.posts)
+        .where(eq(schema.posts.family_id, familyId));
+
+      const photos = photoCount[0]?.count ?? 0;
+      const videos = videoCount[0]?.count ?? 0;
+      const memories = memoryCount[0]?.count ?? 0;
+
+      app.logger.info({ familyId, photos, videos, memories }, 'Family stats retrieved');
+
+      return {
+        photos,
+        videos,
+        memories,
+      };
     }
   );
 }

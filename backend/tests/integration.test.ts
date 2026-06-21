@@ -63,6 +63,21 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // Families - Stats
+  test("Get family statistics", async () => {
+    const res = await authenticatedApi("/api/families/stats", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.photos).toBe("number");
+    expect(typeof data.videos).toBe("number");
+    expect(typeof data.memories).toBe("number");
+  });
+
+  test("Get family stats without auth returns 401", async () => {
+    const res = await api("/api/families/stats");
+    await expectStatus(res, 401);
+  });
+
   // Posts - Create
   test("Create a post", async () => {
     const res = await authenticatedApi("/api/posts", authToken, {
