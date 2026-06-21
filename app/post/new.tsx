@@ -190,7 +190,7 @@ export default function NewPostScreen() {
     console.log("[NewPost] Image uploaded, registering media for post:", postId);
     await apiPost(`/api/posts/${postId}/media`, {
       public_url: publicUrl,
-      media_type: "image",
+      type: "image",
       filename: fileName,
     });
 

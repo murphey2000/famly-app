@@ -124,10 +124,9 @@ export default function TabLayout() {
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(home)" />
-        <Stack.Screen name="memories" />
-        <Stack.Screen name="add" />
-        <Stack.Screen name="newsletter" />
-        <Stack.Screen name="settings" />
+        <Stack.Screen name="memories/index" />
+        <Stack.Screen name="newsletter/index" />
+        <Stack.Screen name="settings/index" />
       </Stack>
       <FamlyTabBar />
     </View>
