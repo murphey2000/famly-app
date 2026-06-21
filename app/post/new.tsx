@@ -141,15 +141,29 @@ export default function NewPostScreen() {
       { filename: fileName, content_type: contentType }
     );
 
-    console.log("[NewPost] Uploading image to:", upload_url);
-    const uploadResult = await FileSystem.uploadAsync(upload_url, image.uri, {
-      httpMethod: "PUT",
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      headers: { "Content-Type": contentType },
-    });
+    console.log("[NewPost] Uploading image to:", upload_url, "platform:", Platform.OS);
+    let uploadStatus: number;
 
-    if (uploadResult.status < 200 || uploadResult.status >= 300) {
-      throw new Error(`Upload failed: ${uploadResult.status}`);
+    if (Platform.OS === "web") {
+      const imageResponse = await fetch(image.uri);
+      const blob = await imageResponse.blob();
+      const uploadResponse = await fetch(upload_url, {
+        method: "PUT",
+        body: blob,
+        headers: { "Content-Type": contentType },
+      });
+      uploadStatus = uploadResponse.status;
+    } else {
+      const uploadResult = await FileSystem.uploadAsync(upload_url, image.uri, {
+        httpMethod: "PUT",
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: { "Content-Type": contentType },
+      });
+      uploadStatus = uploadResult.status;
+    }
+
+    if (uploadStatus < 200 || uploadStatus >= 300) {
+      throw new Error(`Upload failed: ${uploadStatus}`);
     }
 
     console.log("[NewPost] Image uploaded, registering media for post:", postId);
