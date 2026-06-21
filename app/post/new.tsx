@@ -209,8 +209,8 @@ export default function NewPostScreen() {
 
       console.log("[NewPost] POST /api/posts with text:", text.slice(0, 50), "tags:", tags, "date:", date.toISOString());
       const post = await apiPost<{ id: string }>("/api/posts", {
-        text: text.trim(),
-        date: date.toISOString(),
+        raw_text: text.trim(),
+        event_date: date.toISOString(),
         tags,
       });
 
