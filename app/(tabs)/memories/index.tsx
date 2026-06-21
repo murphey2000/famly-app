@@ -103,7 +103,6 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateX = useRef(new Animated.Value(20)).current;
   const yearsAgo = new Date().getFullYear() - memory.year;
-  const photo = memory.post.media.find((m) => m.media_type === "image");
 
   useEffect(() => {
     Animated.parallel([
@@ -111,6 +110,9 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
       Animated.timing(translateX, { toValue: 0, duration: 350, delay: index * 80, useNativeDriver: true }),
     ]).start();
   }, []);
+
+  if (!memory?.post) return null;
+  const photo = memory.post.media.find((m) => m.media_type === "image");
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateX }] }}>
@@ -178,9 +180,7 @@ export default function MemoriesScreen() {
       console.log("[Memories] Data loaded");
 
       const memories = memoriesData
-        ? Array.isArray(memoriesData)
-          ? memoriesData
-          : [memoriesData]
+        ? (Array.isArray(memoriesData) ? memoriesData : [memoriesData]).filter(m => m?.post)
         : [];
       setTodayMemories(memories);
 
