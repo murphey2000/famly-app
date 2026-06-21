@@ -30,6 +30,27 @@ describe("API Integration Tests", () => {
     expect(data.invite_code).toBeDefined();
   });
 
+  test("Create a family without name returns 400", async () => {
+    const res = await authenticatedApi("/api/families", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Create a family without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/families",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Unauthorized Family" }),
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
   // Families - Read
   test("Get current user family", async () => {
     const res = await authenticatedApi("/api/families", authToken);
@@ -37,6 +58,13 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.id).toBe(familyId);
     expect(Array.isArray(data.members)).toBe(true);
+  });
+
+  test("Get family without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/families"
+    );
+    await expectStatus(res, 401);
   });
 
   // Posts - Create
@@ -50,6 +78,18 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     postId = data.id;
     expect(postId).toBeDefined();
+  });
+
+  test("Create a post without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/posts",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_text: "Test" }),
+      }
+    );
+    await expectStatus(res, 401);
   });
 
   // Posts - Read (list)
@@ -68,6 +108,13 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.posts)).toBe(true);
   });
 
+  test("List posts without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/posts"
+    );
+    await expectStatus(res, 401);
+  });
+
   // Posts - Read (single)
   test("Get a single post", async () => {
     const res = await authenticatedApi(`/api/posts/${postId}`, authToken);
@@ -83,6 +130,14 @@ describe("API Integration Tests", () => {
       authToken
     );
     await expectStatus(res, 404);
+  });
+
+  test("Get post with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid",
+      authToken
+    );
+    await expectStatus(res, 400);
   });
 
   // Media - Create
@@ -120,6 +175,18 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "photo",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Add media with invalid type returns 400", async () => {
+    const res = await authenticatedApi(`/api/posts/${postId}/media`, authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "invalid-type",
+        url: "https://example.com/photo.jpg",
       }),
     });
     await expectStatus(res, 400);
@@ -168,6 +235,32 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Get upload URL with missing content_type returns 400", async () => {
+    const res = await authenticatedApi("/api/upload-url", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: "test.jpg",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Get upload URL without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/upload-url",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: "test.jpg",
+          content_type: "image/jpeg",
+        }),
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
   // Posts - Generate preview
   test("Generate AI preview for a post", async () => {
     const res = await authenticatedApi(
@@ -192,6 +285,16 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Generate preview without auth returns 401", async () => {
+    const res = await fetch(
+      `https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/posts/${postId}/generate-preview`,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 401);
   });
 
   // Posts - Publish
@@ -260,6 +363,21 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Publish post without auth returns 401", async () => {
+    const res = await fetch(
+      `https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/posts/${postId}/publish`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_title: "Test AI Title",
+          ai_story: "Test AI Story",
+        }),
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
   // Posts - Delete
   test("Delete a post", async () => {
     const res = await authenticatedApi(`/api/posts/${postId}`, authToken, {
@@ -284,7 +402,41 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Delete post without auth returns 401", async () => {
+    const res = await fetch(
+      `https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/posts/${postId}`,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
   // Families - Join
+  test("Join family with valid invite code", async () => {
+    // Create a second user to test joining
+    const { token: token2, user: user2 } = await signUpTestUser();
+    // Join the first user's family using the invite code from earlier
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test Family 2" }),
+    });
+    await expectStatus(familyRes, 201);
+    const family2Data = await familyRes.json();
+    const inviteCode = family2Data.invite_code;
+
+    // Have another user join via invite code
+    const joinRes = await authenticatedApi("/api/families/join", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invite_code: inviteCode }),
+    });
+    await expectStatus(joinRes, 200);
+    const joinData = await joinRes.json();
+    expect(joinData.id).toBe(family2Data.id);
+  });
+
   test("Join family with invalid invite code returns 404", async () => {
     const res = await authenticatedApi("/api/families/join", authToken, {
       method: "POST",
@@ -294,12 +446,31 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Join family without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/families/join",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invite_code: "some-code" }),
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
   // Memories
   test("Get today's memories", async () => {
     const res = await authenticatedApi("/api/memories/today", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data.memories)).toBe(true);
+  });
+
+  test("Get memories without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/memories/today"
+    );
+    await expectStatus(res, 401);
   });
 
   // Timeline
@@ -315,6 +486,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data.groups)).toBe(true);
+  });
+
+  test("Get timeline without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/timeline"
+    );
+    await expectStatus(res, 401);
   });
 
   // Profile
@@ -341,6 +519,27 @@ describe("API Integration Tests", () => {
     expect(data.name).toBe("Updated Test Name");
   });
 
+  test("Get profile without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/profile"
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Update profile without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/profile",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Unauthorized Update",
+        }),
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
   // Newsletter
   test("Generate newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/generate", authToken, {
@@ -355,8 +554,45 @@ describe("API Integration Tests", () => {
     expect(data.year).toBe(2026);
   });
 
+  test("Generate newsletter with missing month returns 400", async () => {
+    const res = await authenticatedApi("/api/newsletter/generate", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year: 2026 }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Generate newsletter with missing year returns 400", async () => {
+    const res = await authenticatedApi("/api/newsletter/generate", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: 6 }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Get latest newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/latest", authToken);
     await expectStatus(res, 200);
+  });
+
+  test("Generate newsletter without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/newsletter/generate",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: 6, year: 2026 }),
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Get latest newsletter without auth returns 401", async () => {
+    const res = await fetch(
+      "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev/api/newsletter/latest"
+    );
+    await expectStatus(res, 401);
   });
 });
