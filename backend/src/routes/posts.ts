@@ -381,23 +381,56 @@ export function registerPostsRoutes(app: App) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
 
+      // Load related media
+      const mediaRows = await app.db
+        .select()
+        .from(schema.media)
+        .where(eq(schema.media.post_id, post[0].id));
+
       let aiTitle = 'Mein Moment';
       let aiStory = post[0].raw_text || '';
 
       if (process.env.OPENROUTER_API_KEY) {
         try {
-          const tags = Array.isArray(post[0].tags) ? post[0].tags : [];
           const eventDate = post[0].event_date
             ? new Date(post[0].event_date).toISOString().split('T')[0]
-            : 'No date';
+            : '';
 
-          const userPrompt = `Based on this family memory note, generate a short warm German-language title (max 8 words) and a beautifully written German family story (2-4 paragraphs).
+          const userPrompt = `Du bist ein Familienchronik-Assistent. Erstelle aus diesem Familien-Moment einen kurzen, persönlichen und emotionalen Text.
 
-Note: "${post[0].raw_text || ''}"
-Tags: ${tags.join(', ')}
-Event date: ${eventDate}
+Rohtext: ${post[0].raw_text || ''}
+Datum: ${eventDate}
 
-Respond in JSON: {"ai_title": "...", "ai_story": "..."}`;
+WICHTIG:
+- Maximal 160 Zeichen (strikt einhalten!)
+- Persönlich und warm, wie ein Familienmitglied schreiben würde
+- Keine generischen Floskeln
+- Wenn ein Bild vorhanden ist, beziehe dich darauf
+- Auf Deutsch
+
+Antworte NUR mit einem JSON-Objekt:
+{"title": "Kurzer Titel (max 40 Zeichen)", "story": "Kurzer persönlicher Text (max 160 Zeichen)"}`;
+
+          // Find first image media if available
+          const imageMedia = mediaRows.find((m) => m.type === 'image');
+
+          // Build message content - can include image
+          const messageContent: any[] = [];
+          if (imageMedia && imageMedia.url) {
+            messageContent.push({
+              type: 'image',
+              source: {
+                type: 'url',
+                url: imageMedia.url,
+              },
+            });
+          }
+          messageContent.push({
+            type: 'text',
+            text: userPrompt,
+          });
+
+          app.logger.info({ postId: request.params.id, hasImage: !!imageMedia }, 'Calling AI with vision');
 
           const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -406,15 +439,11 @@ Respond in JSON: {"ai_title": "...", "ai_story": "..."}`;
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'openai/gpt-4o-mini',
+              model: 'google/gemini-2.0-flash-001',
               messages: [
                 {
-                  role: 'system',
-                  content: 'You are a family chronicle writer. Generate warm, personal German-language story entries for a family digital chronicle.',
-                },
-                {
                   role: 'user',
-                  content: userPrompt,
+                  content: messageContent,
                 },
               ],
             }),
@@ -428,10 +457,11 @@ Respond in JSON: {"ai_title": "...", "ai_story": "..."}`;
           const content = data.choices[0].message.content;
           const parsed = JSON.parse(content);
 
-          aiTitle = parsed.ai_title || aiTitle;
-          aiStory = parsed.ai_story || aiStory;
+          // Enforce length limits
+          aiTitle = (parsed.title || 'Mein Moment').substring(0, 40);
+          aiStory = (parsed.story || post[0].raw_text || '').substring(0, 160);
 
-          app.logger.info({ postId: request.params.id }, 'Preview generated successfully');
+          app.logger.info({ postId: request.params.id, titleLen: aiTitle.length, storyLen: aiStory.length }, 'Preview generated successfully');
         } catch (error) {
           app.logger.error({ err: error, postId: request.params.id }, 'Failed to generate preview, using fallback');
         }
