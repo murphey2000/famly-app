@@ -216,14 +216,13 @@ function PostCard({ post, index }: { post: Post; index: number }) {
             </Text>
             {post.ai_story ? (
               <Text
-                style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 }}
-                numberOfLines={3}
+                style={{ fontSize: 15, color: COLORS.textSecondary, lineHeight: 24, fontWeight: "500" }}
               >
                 {post.ai_story}
               </Text>
             ) : (
               <Text
-                style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 }}
+                style={{ fontSize: 15, color: COLORS.textSecondary, lineHeight: 24, fontWeight: "500" }}
                 numberOfLines={3}
               >
                 {post.text}

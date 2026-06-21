@@ -686,21 +686,34 @@ export default function NewPostScreen() {
             <TextInput
               value={editedStory}
               onChangeText={(val) => {
-                console.log("[NewPost] AI story edited");
+                console.log("[NewPost] AI story edited, length:", val.length);
                 setEditedStory(val);
               }}
               placeholder="Geschichte..."
               placeholderTextColor={COLORS.textTertiary}
               multiline
+              numberOfLines={4}
               textAlignVertical="top"
               style={{
                 fontSize: 16,
                 color: COLORS.text,
                 lineHeight: 26,
-                minHeight: 200,
-                marginBottom: 16,
+                minHeight: 80,
+                marginBottom: 6,
               }}
             />
+
+            {/* Character counter */}
+            <Text
+              style={{
+                fontSize: 12,
+                color: editedStory.length > 160 ? COLORS.danger : COLORS.textTertiary,
+                textAlign: "right",
+                marginBottom: 12,
+              }}
+            >
+              {editedStory.length}/160
+            </Text>
 
             {/* Hint */}
             <Text
@@ -711,7 +724,7 @@ export default function NewPostScreen() {
                 fontStyle: "italic",
               }}
             >
-              Du kannst den Text noch bearbeiten
+              Max. 160 Zeichen — kurz und persönlich
             </Text>
           </ScrollView>
         </KeyboardAvoidingView>
