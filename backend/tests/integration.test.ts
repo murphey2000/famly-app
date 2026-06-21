@@ -8,6 +8,8 @@ describe("API Integration Tests", () => {
   let familyId: string;
   let postId: string;
   let secondPostId: string; // For testing error cases that don't require post deletion
+  let otherUserToken: string;
+  let otherUserPostId: string; // Post created by another user (for testing 403)
 
   // Auth setup
   test("Sign up test user", async () => {
@@ -486,6 +488,8 @@ describe("API Integration Tests", () => {
   test("Join family with valid invite code", async () => {
     // Create a second user to test joining
     const { token: token2, user: user2 } = await signUpTestUser();
+    otherUserToken = token2; // Save for later 403 tests
+
     // Join the first user's family using the invite code from earlier
     const familyRes = await authenticatedApi("/api/families", token2, {
       method: "POST",
@@ -505,6 +509,19 @@ describe("API Integration Tests", () => {
     await expectStatus(joinRes, 200);
     const joinData = await joinRes.json();
     expect(joinData.id).toBe(family2Data.id);
+  });
+
+  // Create a post by the other user for authorization testing
+  test("Create a post as other user for authorization tests", async () => {
+    const res = await authenticatedApi("/api/posts", otherUserToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Post by other user", tags: ["test"] }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    otherUserPostId = data.id;
+    expect(otherUserPostId).toBeDefined();
   });
 
   test("Join family with invalid invite code returns 404", async () => {
@@ -532,6 +549,41 @@ describe("API Integration Tests", () => {
       body: JSON.stringify({}),
     });
     await expectStatus(res, 400);
+  });
+
+  // Post authorization tests (403)
+  test("Generate preview for another user's post returns 403", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${otherUserPostId}/generate-preview`,
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
+  test("Publish another user's post returns 403", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${otherUserPostId}/publish`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_title: "Test AI Title",
+          ai_story: "Test AI Story",
+        }),
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
+  test("Delete another user's post returns 403", async () => {
+    const res = await authenticatedApi(`/api/posts/${otherUserPostId}`, authToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 403);
   });
 
   // Memories

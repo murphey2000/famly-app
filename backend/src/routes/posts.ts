@@ -42,6 +42,17 @@ export function registerPostsRoutes(app: App) {
                     updated_at: { type: 'string', format: 'date-time' },
                     author: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, image: { type: ['string', 'null'] } } },
                     media_count: { type: 'integer' },
+                    media: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string', format: 'uuid' },
+                          url: { type: 'string' },
+                          type: { type: 'string' },
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -96,7 +107,7 @@ export function registerPostsRoutes(app: App) {
             .where(eq(authSchema.user.id, p.author_id))
             .limit(1);
 
-          const mediaCount = await app.db
+          const mediaRows = await app.db
             .select()
             .from(schema.media)
             .where(eq(schema.media.post_id, p.id));
@@ -108,7 +119,12 @@ export function registerPostsRoutes(app: App) {
               name: author[0].name,
               image: author[0].image,
             },
-            media_count: mediaCount.length,
+            media_count: mediaRows.length,
+            media: mediaRows.map((m) => ({
+              id: m.id,
+              url: m.url,
+              type: m.type,
+            })),
           };
         })
       );
