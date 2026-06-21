@@ -2,21 +2,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
-import { getBearerToken } from "@/utils/api";
-
-/** Wait up to `maxMs` for the bearer token to appear in storage. */
-async function waitForToken(maxMs = 3000, intervalMs = 100): Promise<void> {
-  const deadline = Date.now() + maxMs;
-  while (Date.now() < deadline) {
-    const token = await getBearerToken();
-    if (token) {
-      console.log("[AuthContext] Bearer token confirmed in storage");
-      return;
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  console.warn("[AuthContext] Timed out waiting for bearer token");
-}
 
 interface User {
   id: string;
@@ -107,12 +92,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUser = async () => {
     try {
       setLoading(true);
-      // The bearer token (a JWT) is captured automatically by the
-      // `onSuccess` hook on authClient (in lib/auth.ts) — it reads the
-      // `set-auth-jwt` response header that the auth-service emits on
-      // every session-returning endpoint, including this getSession call.
-      // Do NOT pull a token off session.data.session.token: that field is
-      // the opaque session ID, and the api-service's JWKS verifier rejects it.
       const session = await authClient.getSession();
       if (session?.data?.user) {
         setUser(session.data.user as User);
@@ -130,26 +109,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     console.log("[AuthContext] signInWithEmail called for:", email);
-    const { error } = await authClient.signIn.email({ email, password });
+    const { data, error } = await authClient.signIn.email({ email, password });
     if (error) {
       console.error("[AuthContext] signInWithEmail error:", error);
       throw new Error(error.message || "Anmeldung fehlgeschlagen");
     }
-    console.log("[AuthContext] signInWithEmail success, fetching user");
+    const token = (data as any)?.token;
+    if (token) {
+      await setBearerToken(token);
+      console.log("[AuthContext] Bearer token saved from signIn response");
+    } else {
+      console.warn("[AuthContext] No token in signIn response — auth may fail");
+    }
     await fetchUser();
-    await waitForToken();
   };
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
     console.log("[AuthContext] signUpWithEmail called for:", email, "name:", name);
-    const { error } = await authClient.signUp.email({ email, password, name: name ?? "" });
+    const { data, error } = await authClient.signUp.email({ email, password, name: name ?? "" });
     if (error) {
       console.error("[AuthContext] signUpWithEmail error:", error);
       throw new Error(error.message || "Registrierung fehlgeschlagen");
     }
-    console.log("[AuthContext] signUpWithEmail success, fetching user");
+    const token = (data as any)?.token;
+    if (token) {
+      await setBearerToken(token);
+      console.log("[AuthContext] Bearer token saved from signUp response");
+    } else {
+      console.warn("[AuthContext] No token in signUp response — auth may fail");
+    }
     await fetchUser();
-    await waitForToken();
   };
 
   const signInWithSocial = async (provider: "apple" | "google") => {
@@ -158,13 +147,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setBearerToken(token);
       await fetchUser();
     } else {
-      const { error } = await authClient.signIn.social({
+      const { data, error } = await authClient.signIn.social({
         provider,
         callbackURL: "/auth-callback",
       });
       if (error) {
         throw new Error(error.message || "Social sign in failed");
       }
+      const token = (data as any)?.token;
+      if (token) await setBearerToken(token);
       await fetchUser();
     }
   };
@@ -173,7 +164,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithApple = async () => {
     if (Platform.OS === "ios") {
-      // Native Apple Sign In on iOS — shows the system Face ID / password modal
       const AppleAuthentication = require("expo-apple-authentication");
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
@@ -184,16 +174,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!credential.identityToken) {
         throw new Error("No identity token received from Apple");
       }
-      const { error } = await authClient.signIn.social({
+      const { data, error } = await authClient.signIn.social({
         provider: "apple",
         idToken: credential.identityToken,
       });
       if (error) {
         throw new Error(error.message || "Apple sign in failed");
       }
+      const token = (data as any)?.token;
+      if (token) await setBearerToken(token);
       await fetchUser();
     } else {
-      // Web / Android: OAuth redirect flow
       await signInWithSocial("apple");
     }
   };
