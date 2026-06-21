@@ -142,31 +142,34 @@ export default function NewPostScreen() {
     );
 
     console.log("[NewPost] Uploading image to:", upload_url, "platform:", Platform.OS);
-    let uploadStatus: number;
 
     if (Platform.OS === "web") {
       const imageResponse = await fetch(image.uri);
-      const rawBlob = await imageResponse.blob();
-      // Reconstruct blob with explicit content type so browser doesn't override the header
-      const blob = new Blob([rawBlob], { type: contentType });
-      console.log("[NewPost] Web upload blob type:", blob.type, "contentType:", contentType);
-      const uploadResponse = await fetch(upload_url, {
-        method: "PUT",
-        body: blob,
-        headers: { "Content-Type": contentType },
+      const arrayBuffer = await imageResponse.arrayBuffer();
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", upload_url);
+        xhr.setRequestHeader("Content-Type", contentType);
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload network error"));
+        xhr.send(arrayBuffer);
       });
-      uploadStatus = uploadResponse.status;
     } else {
       const uploadResult = await FileSystem.uploadAsync(upload_url, image.uri, {
         httpMethod: "PUT",
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
         headers: { "Content-Type": contentType },
       });
-      uploadStatus = uploadResult.status;
-    }
-
-    if (uploadStatus < 200 || uploadStatus >= 300) {
-      throw new Error(`Upload failed: ${uploadStatus}`);
+      if (uploadResult.status < 200 || uploadResult.status >= 300) {
+        throw new Error(`Upload failed: ${uploadResult.status}`);
+      }
     }
 
     console.log("[NewPost] Image uploaded, registering media for post:", postId);
