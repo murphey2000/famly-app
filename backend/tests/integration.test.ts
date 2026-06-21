@@ -168,6 +168,98 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // Posts - Generate preview
+  test("Generate AI preview for a post", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/generate-preview`,
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.ai_title).toBeDefined();
+    expect(data.ai_story).toBeDefined();
+  });
+
+  test("Generate preview for non-existent post returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/00000000-0000-0000-0000-000000000000/generate-preview",
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  // Posts - Publish
+  test("Publish a post", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/publish`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_title: "Test AI Title",
+          ai_story: "Test AI Story",
+        }),
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(postId);
+    expect(data.ai_status).toBeDefined();
+  });
+
+  test("Publish post with missing ai_title returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/publish`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_story: "Test AI Story",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Publish post with missing ai_story returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/publish`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_title: "Test AI Title",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Publish non-existent post returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/00000000-0000-0000-0000-000000000000/publish",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_title: "Test AI Title",
+          ai_story: "Test AI Story",
+        }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
   // Posts - Delete
   test("Delete a post", async () => {
     const res = await authenticatedApi(`/api/posts/${postId}`, authToken, {

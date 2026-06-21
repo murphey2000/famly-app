@@ -37,13 +37,13 @@ export const posts = pgTable('posts', {
   raw_text: text('raw_text'),
   ai_title: text('ai_title'),
   ai_story: text('ai_story'),
-  ai_status: text('ai_status').notNull().default('pending'),
+  ai_status: text('ai_status').notNull().default('draft'),
   event_date: timestamp('event_date', { withTimezone: true }),
   tags: json('tags').default([]).$type<string[]>(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-  check('ai_status_check', sql`"ai_status" IN ('pending', 'processing', 'done', 'error')`),
+  check('ai_status_check', sql`"ai_status" IN ('draft', 'published', 'error')`),
 ]);
 
 export const media = pgTable('media', {

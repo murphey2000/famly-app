@@ -4,83 +4,6 @@ import { eq, and, desc } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 
-async function generateAIStory(app: App, post: any): Promise<void> {
-  try {
-    await app.db
-      .update(schema.posts)
-      .set({ ai_status: 'processing' })
-      .where(eq(schema.posts.id, post.id));
-
-    if (!process.env.OPENROUTER_API_KEY) {
-      app.logger.warn({ postId: post.id }, 'OPENROUTER_API_KEY not set, skipping AI generation');
-      await app.db
-        .update(schema.posts)
-        .set({ ai_status: 'done' })
-        .where(eq(schema.posts.id, post.id));
-      return;
-    }
-
-    const tags = Array.isArray(post.tags) ? post.tags : [];
-    const eventDate = post.event_date ? new Date(post.event_date).toISOString().split('T')[0] : 'No date';
-
-    const userPrompt = `Input: "${post.raw_text || ''}"
-Tags: ${tags.join(', ')}
-Event date: ${eventDate}
-
-Write:
-1. A short, warm title (max 8 words)
-2. A 2-4 sentence story in the SAME LANGUAGE as the input. Make it feel like a cherished family memory — personal, warm, present tense.
-
-Respond in JSON: {"title": "...", "story": "..."}`;
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-flash-1.5',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a family chronicle writer. Given a short note from a family member, write a warm, personal story entry for the family\'s digital chronicle.',
-          },
-          {
-            role: 'user',
-            content: userPrompt,
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status}`);
-    }
-
-    const data = await response.json() as { choices: Array<{ message: { content: string } }> };
-    const content = data.choices[0].message.content;
-    const parsed = JSON.parse(content);
-
-    await app.db
-      .update(schema.posts)
-      .set({
-        ai_title: parsed.title,
-        ai_story: parsed.story,
-        ai_status: 'done',
-      })
-      .where(eq(schema.posts.id, post.id));
-
-    app.logger.info({ postId: post.id }, 'AI story generated successfully');
-  } catch (error) {
-    app.logger.error({ err: error, postId: post.id }, 'Failed to generate AI story');
-    await app.db
-      .update(schema.posts)
-      .set({ ai_status: 'error' })
-      .where(eq(schema.posts.id, post.id));
-  }
-}
-
 export function registerPostsRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
@@ -255,17 +178,13 @@ export function registerPostsRoutes(app: App) {
           raw_text: request.body.raw_text || null,
           event_date: eventDate,
           tags: request.body.tags || [],
-          ai_status: 'processing',
+          ai_status: 'draft',
         })
         .returning();
 
       const [createdPost] = post;
 
-      app.logger.info({ postId: createdPost.id }, 'Post created, starting AI generation');
-
-      generateAIStory(app, createdPost).catch((error) => {
-        app.logger.error({ err: error, postId: createdPost.id }, 'Background AI generation failed');
-      });
+      app.logger.info({ postId: createdPost.id }, 'Post created as draft');
 
       reply.status(201);
       return createdPost;
@@ -411,6 +330,197 @@ export function registerPostsRoutes(app: App) {
       app.logger.info({ postId: request.params.id }, 'Post deleted');
 
       return { success: true };
+    }
+  );
+
+  app.fastify.post(
+    '/api/posts/:id/generate-preview',
+    {
+      schema: {
+        description: 'Generate AI preview for a post',
+        tags: ['posts'],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              ai_title: { type: 'string' },
+              ai_story: { type: 'string' },
+            },
+          },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+          403: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ postId: request.params.id, userId: session.user.id }, 'Generating post preview');
+
+      const post = await app.db
+        .select()
+        .from(schema.posts)
+        .where(eq(schema.posts.id, request.params.id))
+        .limit(1);
+
+      if (!post.length) {
+        return reply.status(404).send({ error: 'Post not found' });
+      }
+
+      if (post[0].author_id !== session.user.id) {
+        app.logger.warn({ postId: request.params.id, userId: session.user.id }, 'Unauthorized preview generation attempt');
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+
+      let aiTitle = 'Mein Moment';
+      let aiStory = post[0].raw_text || '';
+
+      if (process.env.OPENROUTER_API_KEY) {
+        try {
+          const tags = Array.isArray(post[0].tags) ? post[0].tags : [];
+          const eventDate = post[0].event_date
+            ? new Date(post[0].event_date).toISOString().split('T')[0]
+            : 'No date';
+
+          const userPrompt = `Based on this family memory note, generate a short warm German-language title (max 8 words) and a beautifully written German family story (2-4 paragraphs).
+
+Note: "${post[0].raw_text || ''}"
+Tags: ${tags.join(', ')}
+Event date: ${eventDate}
+
+Respond in JSON: {"ai_title": "...", "ai_story": "..."}`;
+
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'openai/gpt-4o-mini',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are a family chronicle writer. Generate warm, personal German-language story entries for a family digital chronicle.',
+                },
+                {
+                  role: 'user',
+                  content: userPrompt,
+                },
+              ],
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`OpenRouter API error: ${response.status}`);
+          }
+
+          const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+          const content = data.choices[0].message.content;
+          const parsed = JSON.parse(content);
+
+          aiTitle = parsed.ai_title || aiTitle;
+          aiStory = parsed.ai_story || aiStory;
+
+          app.logger.info({ postId: request.params.id }, 'Preview generated successfully');
+        } catch (error) {
+          app.logger.error({ err: error, postId: request.params.id }, 'Failed to generate preview, using fallback');
+        }
+      } else {
+        app.logger.warn({ postId: request.params.id }, 'OPENROUTER_API_KEY not set, using fallback preview');
+      }
+
+      return {
+        ai_title: aiTitle,
+        ai_story: aiStory,
+      };
+    }
+  );
+
+  app.fastify.post(
+    '/api/posts/:id/publish',
+    {
+      schema: {
+        description: 'Publish a draft post with AI content',
+        tags: ['posts'],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+          },
+        },
+        body: {
+          type: 'object',
+          required: ['ai_title', 'ai_story'],
+          properties: {
+            ai_title: { type: 'string' },
+            ai_story: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              ai_status: { type: 'string' },
+            },
+          },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+          403: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: { ai_title: string; ai_story: string } }>,
+      reply: FastifyReply
+    ) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ postId: request.params.id, userId: session.user.id }, 'Publishing post');
+
+      const post = await app.db
+        .select()
+        .from(schema.posts)
+        .where(eq(schema.posts.id, request.params.id))
+        .limit(1);
+
+      if (!post.length) {
+        return reply.status(404).send({ error: 'Post not found' });
+      }
+
+      if (post[0].author_id !== session.user.id) {
+        app.logger.warn({ postId: request.params.id, userId: session.user.id }, 'Unauthorized publish attempt');
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+
+      const updated = await app.db
+        .update(schema.posts)
+        .set({
+          ai_title: request.body.ai_title,
+          ai_story: request.body.ai_story,
+          ai_status: 'published',
+          updated_at: new Date(),
+        })
+        .where(eq(schema.posts.id, request.params.id))
+        .returning();
+
+      const [publishedPost] = updated;
+
+      app.logger.info({ postId: publishedPost.id }, 'Post published successfully');
+
+      return publishedPost;
     }
   );
 }
