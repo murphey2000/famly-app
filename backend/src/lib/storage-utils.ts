@@ -1,12 +1,22 @@
 import type { App } from '../index.js';
 
 /**
+ * Build a permanent public URL from a storage key.
+ *
+ * The Specular storage proxy serves uploaded objects at
+ * `${STORAGE_API_BASE_URL}/public/<key>`. STORAGE_API_BASE_URL is injected into
+ * the backend at runtime (e.g. https://api.specular.dev/storage-proxy/<token>).
+ */
+export function generatePublicUrl(storageKey: string): string {
+  const base = process.env.STORAGE_API_BASE_URL || '';
+  return `${base}/public/${storageKey}`;
+}
+
+/**
  * Resolve the storage key for a media row.
  *
- * Prefers the explicit `storage_key` column. Falls back to parsing a key out of
- * a previously-stored URL so legacy rows keep working:
- *  - rows that stored a host-less `/public/<key>` path
- *  - rows that stored an old signed URL (key is the path, minus the query)
+ * Prefers the explicit `storage_key` column, then falls back to parsing the key
+ * out of a previously-stored `/public/<key>` URL so legacy rows keep working.
  */
 export function extractStorageKey(
   url: string | null | undefined,
@@ -15,43 +25,30 @@ export function extractStorageKey(
   if (storageKey) return storageKey;
   if (!url) return null;
 
-  // URL that embeds the key after "/public/"
   const publicIdx = url.indexOf('/public/');
   if (publicIdx !== -1) {
     return decodeURIComponent(url.slice(publicIdx + '/public/'.length).split('?')[0]);
-  }
-
-  // Legacy signed URLs (S3/GCS) — the key is the path, sans query string
-  if (url.includes('X-Amz-') || url.includes('X-Goog-') || url.includes('x-goog-signature')) {
-    try {
-      const { pathname } = new URL(url);
-      const path = pathname.startsWith('/') ? pathname.slice(1) : pathname;
-      return decodeURIComponent(path.startsWith('public/') ? path.slice('public/'.length) : path);
-    } catch {
-      return null;
-    }
   }
 
   return null;
 }
 
 /**
- * Resolve a stored media reference to a fresh, readable URL.
+ * Resolve a stored media reference to a readable public URL.
  *
- * Object storage exposes files via short-lived signed URLs, so we mint one per
- * request from the storage key. If no key can be derived (e.g. an already
- * absolute URL), the stored URL is returned unchanged.
+ * When we know the storage key we regenerate the public URL from it (this
+ * survives changes to STORAGE_API_BASE_URL); otherwise the stored URL is
+ * already a usable public URL and is returned as-is.
+ *
+ * `storage` is currently unused but kept in the signature so callers don't need
+ * to change if storage-backed URL generation is reintroduced.
  */
 export async function resolveMediaUrl(
-  storage: App['storage'],
+  _storage: App['storage'],
   url: string | null | undefined,
   storageKey: string | null | undefined
 ): Promise<string | null> {
   const key = extractStorageKey(url, storageKey);
-  if (!key) return url ?? null;
-  try {
-    return await storage.getSignedUrl(key);
-  } catch {
-    return url ?? null;
-  }
+  if (key) return generatePublicUrl(key);
+  return url ?? null;
 }
