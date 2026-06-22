@@ -363,7 +363,10 @@ export function registerMediaRoutes(app: App) {
         // Generate storage key with sanitized filename
         const uniqueId = crypto.randomUUID();
         const safeFilename = filename.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._\-]/g, '');
-        const fileExtension = safeFilename.split('.').pop() || 'bin';
+        const originalExtension = safeFilename.split('.').pop() || 'bin';
+        // Enhancement re-encodes to JPEG, so the stored key must reflect that —
+        // otherwise the bytes (JPEG) and the key's extension (e.g. .png/.heic) mismatch.
+        const fileExtension = enhancedMimetype === 'image/jpeg' ? 'jpg' : originalExtension;
         const storageKey = `media/${familyId}/${uniqueId}.${fileExtension}`;
 
         // Upload the file to storage
