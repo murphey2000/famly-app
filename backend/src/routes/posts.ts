@@ -48,9 +48,13 @@ export function registerPostsRoutes(app: App) {
                         type: 'object',
                         properties: {
                           id: { type: 'string', format: 'uuid' },
-                          url: { type: 'string' },
+                          post_id: { type: 'string', format: 'uuid' },
+                          family_id: { type: 'string', format: 'uuid' },
+                          uploader_id: { type: 'string' },
                           type: { type: 'string' },
+                          url: { type: 'string' },
                           thumbnail_url: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                          created_at: { type: 'string', format: 'date-time' },
                         },
                       },
                     },
@@ -140,14 +144,21 @@ export function registerPostsRoutes(app: App) {
           media_count: mediaRows.length,
           media: mediaRows.map((m) => ({
             id: m.id,
-            url: m.url,
+            post_id: m.post_id,
+            family_id: m.family_id,
+            uploader_id: m.uploader_id,
             type: m.type,
+            url: m.url,
             thumbnail_url: m.thumbnail_url,
+            created_at: m.created_at,
           })),
         };
       });
 
       app.logger.info({ count: postsWithDetails.length, total: totalResult.length }, 'Posts retrieved');
+
+      const firstPostMedia = postIds.length > 0 ? (mediaByPostId.get(postIds[0]) ?? []) : [];
+      app.logger.info({ firstPostMedia }, '[Posts] post[0] media');
 
       return {
         posts: postsWithDetails,
@@ -260,9 +271,13 @@ export function registerPostsRoutes(app: App) {
                   type: 'object',
                   properties: {
                     id: { type: 'string', format: 'uuid' },
-                    url: { type: 'string' },
+                    post_id: { type: 'string', format: 'uuid' },
+                    family_id: { type: 'string', format: 'uuid' },
+                    uploader_id: { type: 'string' },
                     type: { type: 'string' },
+                    url: { type: 'string' },
                     thumbnail_url: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                    created_at: { type: 'string', format: 'date-time' },
                   },
                 },
               },
@@ -307,9 +322,13 @@ export function registerPostsRoutes(app: App) {
         },
         media: mediaRows.map((m) => ({
           id: m.id,
-          url: m.url,
+          post_id: m.post_id,
+          family_id: m.family_id,
+          uploader_id: m.uploader_id,
           type: m.type,
+          url: m.url,
           thumbnail_url: m.thumbnail_url,
+          created_at: m.created_at,
         })),
       };
     }
