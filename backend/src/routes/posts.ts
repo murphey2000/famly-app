@@ -429,28 +429,13 @@ export function registerPostsRoutes(app: App) {
         const userText = post[0].raw_text || '';
         const fullPrompt = `${systemPrompt}\n\nText zum Verbessern:\n${userText}`;
 
-        // Find first image media if available
-        const imageMedia = mediaRows.find((m) => m.type === 'image');
-        if (imageMedia && imageMedia.url) {
-          app.logger.info({ postId: request.params.id, imageUrl: imageMedia.url }, 'Using image from media');
+        // Determine if we have image media
+        const hasImage = mediaRows.length > 0 && mediaRows[0].type === 'image' && !!mediaRows[0].url;
+        if (hasImage) {
+          app.logger.info({ postId: request.params.id, imageUrl: mediaRows[0].url }, 'Using image from media');
         }
 
-        // Build message content - can include image
-        const messageContent: any[] = [];
-        if (imageMedia && imageMedia.url) {
-          messageContent.push({
-            type: 'image_url',
-            image_url: {
-              url: imageMedia.url,
-            },
-          });
-        }
-        messageContent.push({
-          type: 'text',
-          text: fullPrompt,
-        });
-
-        app.logger.info({ postId: request.params.id, hasImage: !!imageMedia }, 'Calling AI with vision');
+        app.logger.info({ postId: request.params.id, hasImage }, 'Calling AI with vision');
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -459,11 +444,11 @@ export function registerPostsRoutes(app: App) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.0-flash',
+            model: 'openai/gpt-4o-mini',
             messages: [
               {
                 role: 'user',
-                content: messageContent,
+                content: fullPrompt,
               },
             ],
           }),
