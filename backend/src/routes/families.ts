@@ -302,7 +302,7 @@ export function registerFamiliesRoutes(app: App) {
       const photoCount = await app.db
         .select({ count: count() })
         .from(schema.media)
-        .where(eq(schema.media.family_id, familyId) && eq(schema.media.type, 'image'));
+        .where(eq(schema.media.family_id, familyId) && eq(schema.media.type, 'photo'));
 
       const videoCount = await app.db
         .select({ count: count() })
@@ -314,9 +314,9 @@ export function registerFamiliesRoutes(app: App) {
         .from(schema.posts)
         .where(eq(schema.posts.family_id, familyId));
 
-      const photos = photoCount[0]?.count ?? 0;
-      const videos = videoCount[0]?.count ?? 0;
-      const memories = memoryCount[0]?.count ?? 0;
+      const photos = parseInt(String(photoCount[0]?.count ?? 0), 10);
+      const videos = parseInt(String(videoCount[0]?.count ?? 0), 10);
+      const memories = parseInt(String(memoryCount[0]?.count ?? 0), 10);
 
       app.logger.info({ familyId, photos, videos, memories }, 'Family stats retrieved');
 

@@ -418,19 +418,25 @@ export function registerPostsRoutes(app: App) {
         .where(eq(schema.media.post_id, post[0].id));
 
       app.logger.info({ postId: request.params.id, mediaCount: mediaRows.length }, 'Loaded media from database');
+      if (mediaRows.length > 0) {
+        app.logger.info({ firstMediaRow: mediaRows[0] }, 'First media row');
+      }
 
       if (!process.env.OPENROUTER_API_KEY) {
         return reply.status(500).send({ error: 'OPENROUTER_API_KEY not configured' });
       }
 
       try {
-        const systemPrompt = `Du bist ein Familienchronist. Verbessere den folgenden Text sprachlich — mach ihn lebendiger, wärmer und persönlicher. Füge KEINE neuen Fakten, Ereignisse oder Personen hinzu, die nicht im Original stehen. Behalte den Inhalt exakt bei. Maximal 60 Wörter. Antworte NUR mit einem JSON-Objekt: {"title": "...", "story": "..."}`;
+        const systemPrompt = `Du bist ein Familientagebuch-Assistent. Schreibe einen kurzen, warmen Eintrag auf Deutsch.
+Halte dich strikt an die genannten Fakten – erfinde nichts dazu.
+Maximal 40 Wörter für die Geschichte. Ton: persönlich und herzlich, wie ein Tagebucheintrag – nicht poetisch.
+Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
 
         const userText = post[0].raw_text || '';
         const fullPrompt = `${systemPrompt}\n\nText zum Verbessern:\n${userText}`;
 
         // Determine if we have image media
-        const hasImage = mediaRows.length > 0 && mediaRows[0].type === 'image' && !!mediaRows[0].url;
+        const hasImage = mediaRows.length > 0 && !!mediaRows[0].url;
         if (hasImage) {
           app.logger.info({ postId: request.params.id, imageUrl: mediaRows[0].url }, 'Using image from media');
         }
