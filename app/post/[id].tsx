@@ -5,6 +5,7 @@ import {
   ScrollView,
   Animated,
   Alert,
+  Modal,
   Pressable,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -105,6 +106,7 @@ export default function PostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -141,28 +143,20 @@ export default function PostDetailScreen() {
 
   const handleDelete = () => {
     console.log("[PostDetail] Delete button pressed for post:", id);
-    Alert.alert(
-      "Beitrag löschen",
-      "Möchtest du diesen Moment wirklich löschen? Das kann nicht rückgängig gemacht werden.",
-      [
-        { text: "Abbrechen", style: "cancel" },
-        {
-          text: "Löschen",
-          style: "destructive",
-          onPress: async () => {
-            console.log("[PostDetail] Delete confirmed for post:", id);
-            try {
-              await apiDelete(`/api/posts/${id}`, {});
-              console.log("[PostDetail] Post deleted, navigating back");
-              router.back();
-            } catch (err: any) {
-              console.error("[PostDetail] Delete error:", err);
-              Alert.alert("Fehler", "Beitrag konnte nicht gelöscht werden");
-            }
-          },
-        },
-      ]
-    );
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    console.log("[PostDetail] Delete confirmed for post:", id);
+    setShowDeleteModal(false);
+    try {
+      await apiDelete(`/api/posts/${id}`, {});
+      console.log("[PostDetail] Post deleted, navigating back");
+      router.back();
+    } catch (err: any) {
+      console.error("[PostDetail] Delete error:", err);
+      Alert.alert("Fehler", "Beitrag konnte nicht gelöscht werden");
+    }
   };
 
   console.log("[PostDetail] isAuthor check:", post?.author?.id, user?.id);
@@ -291,6 +285,91 @@ export default function PostDetailScreen() {
             )}
           </View>
         )}
+
+        {/* Delete confirmation modal */}
+        <Modal
+          visible={showDeleteModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowDeleteModal(false)}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 32,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: COLORS.surface,
+                borderRadius: 16,
+                padding: 24,
+                width: "100%",
+                maxWidth: 360,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: COLORS.text,
+                  marginBottom: 10,
+                }}
+              >
+                Beitrag löschen
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: COLORS.textSecondary,
+                  lineHeight: 22,
+                  marginBottom: 24,
+                }}
+              >
+                Möchtest du diesen Moment wirklich löschen? Das kann nicht rückgängig gemacht werden.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <Pressable
+                  onPress={() => {
+                    console.log("[PostDetail] Delete cancelled");
+                    setShowDeleteModal(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: COLORS.textSecondary }}>
+                    Abbrechen
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleDeleteConfirm}
+                  style={{
+                    flex: 1,
+                    borderRadius: 10,
+                    backgroundColor: COLORS.danger,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: "#FFFFFF" }}>
+                    Löschen
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <ScrollView
           contentContainerStyle={{ paddingBottom: 60 }}
