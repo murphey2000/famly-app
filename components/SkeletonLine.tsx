@@ -11,7 +11,7 @@ export function SkeletonLine({ width, height = 14 }: { width: number | `${number
         Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [opacity]);
   return (
     <View style={{ width, height, borderRadius: height / 2, overflow: "hidden" }}>
       <Animated.View style={{ flex: 1, backgroundColor: COLORS.surfaceSecondary, opacity }} />

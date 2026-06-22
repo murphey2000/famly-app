@@ -58,7 +58,7 @@ function NavigationGuard({ children }: { children: React.ReactNode }) {
       console.log("[Nav] No user, redirecting to auth-screen");
       router.replace("/auth-screen");
     }
-  }, [user, loading, segments]);
+  }, [user, loading, segments, router]);
 
   return <>{children}</>;
 }

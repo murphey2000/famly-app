@@ -40,7 +40,7 @@ export default function OnboardingScreen() {
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   const handleCreateFamily = async () => {
     console.log("[Onboarding] Create family button pressed, name:", familyName);

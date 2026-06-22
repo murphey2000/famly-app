@@ -79,14 +79,14 @@ export default function AuthScreen() {
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   useEffect(() => {
     if (user && !loading) {
       console.log("[Auth] User authenticated, navigating to tabs");
       router.replace("/(tabs)/(home)");
     }
-  }, [user, loading]);
+  }, [user, loading, router]);
 
   const handleAppleSignIn = async () => {
     console.log("[Auth] Apple sign in button pressed");

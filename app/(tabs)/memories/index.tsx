@@ -237,7 +237,7 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
       Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 80, useNativeDriver: true }),
       Animated.timing(translateX, { toValue: 0, duration: 350, delay: index * 80, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [index, opacity, translateX]);
 
   if (!memory?.post) return null;
   const photo = (memory.post.media ?? []).find((m) => m.type === "photo");
@@ -366,7 +366,8 @@ export default function MemoriesScreen() {
   const { data: family } = useFamily();
   const todayMemoryQuery = useTodayMemory();
 
-  const allPosts = postsQuery.data ?? [];
+  const allPostsRaw = postsQuery.data;
+  const allPosts = useMemo(() => allPostsRaw ?? [], [allPostsRaw]);
   const todayMemories = todayMemoryQuery.data ?? [];
   const loading = postsQuery.isLoading || todayMemoryQuery.isLoading;
 

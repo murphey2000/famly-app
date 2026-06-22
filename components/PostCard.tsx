@@ -84,7 +84,7 @@ export function PostCard({ post, index }: { post: Post; index: number }) {
       Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [index, opacity, translateY]);
 
   const isProcessing = post.ai_status === "processing" || post.ai_status === "pending";
   const media = post.media ?? [];

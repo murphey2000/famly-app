@@ -90,7 +90,7 @@ export default function SettingsScreen() {
       setLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     }
-  }, []);
+  }, [fadeAnim]);
 
   useEffect(() => {
     loadFamily();

@@ -61,7 +61,7 @@ function NewsletterView({ newsletter }: { newsletter: Newsletter }) {
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-  }, [newsletter.id]);
+  }, [newsletter.id, fadeAnim]);
 
   return (
     <Animated.View style={{ opacity: fadeAnim, gap: 20 }}>

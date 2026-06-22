@@ -45,7 +45,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
         Animated.timing(translateY, { toValue: 20, duration: 200, useNativeDriver: true }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, opacity, translateY]);
 
   return (
     <Animated.View

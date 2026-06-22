@@ -97,7 +97,7 @@ export default function PostDetailScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, fadeAnim]);
 
   useEffect(() => {
     loadPost();
@@ -112,7 +112,7 @@ export default function PostDetailScreen() {
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [post?.ai_status, loadPost]);
+  }, [post, loadPost]);
 
   const handleDelete = () => {
     console.log("[PostDetail] Delete button pressed for post:", id);

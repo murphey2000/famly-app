@@ -12,13 +12,13 @@ function FamlyTabBar() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
-  const tabs: Array<{
+  const tabs: {
     name: string;
     route: string;
     icon: typeof Home;
     label: string;
     special?: boolean;
-  }> = [
+  }[] = [
     { name: "home", route: "/(tabs)/(home)", icon: Home, label: "Zuhause" },
     { name: "memories", route: "/(tabs)/memories", icon: Clock, label: "Erinnerungen" },
     { name: "add", route: "/post/new", icon: Plus, label: "Hinzufügen", special: true },
