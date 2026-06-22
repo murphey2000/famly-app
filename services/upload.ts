@@ -25,8 +25,8 @@ export async function uploadFile(
   const contentType = media.mimeType || (media.mediaType === "video" ? "video/mp4" : "image/jpeg");
 
   // Both platforms upload through the backend (/api/upload-file). The backend
-  // stores the file and returns its durable storage `key` plus a freshly
-  // signed `url` for immediate display.
+  // stores the file and returns the permanent public `url`/`public_url` and,
+  // on newer deploys, the storage `key`.
   let result: UploadFileResponse;
 
   if (Platform.OS === "web") {
@@ -73,12 +73,12 @@ export async function uploadFile(
 
   console.log("[Upload] Upload result:", JSON.stringify(result));
   const displayUrl = result.public_url ?? result.url;
-  if (!displayUrl || !result.key) {
-    throw new Error("Upload response missing key/url: " + JSON.stringify(result));
+  if (!displayUrl) {
+    throw new Error("Upload response missing url: " + JSON.stringify(result));
   }
 
-  // Persist the storage key (the durable reference) so the backend can mint a
-  // fresh signed URL every time the post is read.
+  // Persist the public URL plus the storage key when the backend provides one
+  // (older backends only return the URL — that's fine, the URL is permanent).
   console.log("[Upload] Registering media — postId:", postId, "key:", result.key, "type:", media.mediaType);
   await apiPost(`/api/posts/${postId}/media`, {
     url: displayUrl,
