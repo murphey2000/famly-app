@@ -1,1 +1,1 @@
-ALTER TABLE "user" ADD COLUMN "push_token" text;
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "push_token" text;

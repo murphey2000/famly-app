@@ -811,6 +811,40 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // Profile - Push token
+  test("Save push token", async () => {
+    const res = await authenticatedApi("/api/profile/push-token", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "ExponentPushToken[test-token-abc123]",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Save push token with missing token returns 400", async () => {
+    const res = await authenticatedApi("/api/profile/push-token", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Save push token without auth returns 401", async () => {
+    const res = await api("/api/profile/push-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "ExponentPushToken[test-token-abc123]",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // Newsletter
   test("Generate newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/generate", authToken, {
