@@ -20,10 +20,9 @@ import { formatRelativeDate } from "@/utils/dateUtils";
 import { SkeletonLine } from "@/components/SkeletonLine";
 import { InspirationChips } from "@/components/InspirationChips";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
-import { usePosts } from "@/hooks/usePosts";
+import { useFeed } from "@/hooks/useFeed";
 import { useFamily } from "@/hooks/useFamily";
-import { useTodayMemory } from "@/hooks/useTodayMemory";
-import type { Post, FamilyMember, FamilyStats, TodayMemory } from "@/types";
+import type { Post, FamilyMember, FamilyStats, TodayMemory, FeedItemPost, FeedItemBirthday } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -385,6 +384,56 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
   );
 }
 
+function BirthdayCard({ item }: { item: FeedItemBirthday }) {
+  const { member, daysUntil, age } = item;
+
+  let statusText: string;
+  if (daysUntil === 0) {
+    statusText = "Heute Geburtstag! 🎉";
+  } else if (daysUntil === 1) {
+    statusText = "Morgen Geburtstag!";
+  } else {
+    statusText = "In " + daysUntil + " Tagen Geburtstag";
+  }
+
+  const ageText = age !== null ? "wird " + age + " Jahre alt" : null;
+
+  return (
+    <View
+      style={{
+        backgroundColor: "#FFF8E7",
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#FFD166",
+        padding: 14,
+        marginHorizontal: 16,
+        marginBottom: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <AuthorAvatar author={member} size={44} />
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+          <Text style={{ fontSize: 18 }}>🎂</Text>
+          <Text style={{ fontSize: 15, fontWeight: "700", color: "#7A4F00" }}>
+            {member.name}
+          </Text>
+        </View>
+        <Text style={{ fontSize: 13, fontWeight: "600", color: "#B07800" }}>
+          {statusText}
+        </Text>
+        {ageText !== null && (
+          <Text style={{ fontSize: 12, color: "#B07800", marginTop: 2 }}>
+            {ageText}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function EmptyState() {
   const router = useRouter();
   const headline = "✨ Eure Familiengeschichte beginnt hier";
@@ -528,15 +577,24 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
 
-  const postsQuery = usePosts(selectedAuthorId);
+  const feedQuery = useFeed(selectedAuthorId);
   const familyQuery = useFamily();
-  const todayMemoryQuery = useTodayMemory();
 
-  const posts = postsQuery.data ?? [];
+  const feedItems = feedQuery.data ?? [];
   const family = familyQuery.data ?? null;
-  const todayMemory = todayMemoryQuery.data?.[0] ?? null;
-  const loading = postsQuery.isLoading || familyQuery.isLoading || todayMemoryQuery.isLoading;
-  const error = postsQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
+
+  const postItems = feedItems.filter((item): item is FeedItemPost => item.kind === "post");
+  const posts = postItems.map((item) => item.post);
+
+  const firstMemoryItem = feedItems.find((item) => item.kind === "memory");
+  const todayMemory: TodayMemory | null = firstMemoryItem && firstMemoryItem.kind === "memory"
+    ? { id: firstMemoryItem.post.id, year: firstMemoryItem.year, post: firstMemoryItem.post }
+    : null;
+
+  const birthdayItems = feedItems.filter((item): item is FeedItemBirthday => item.kind === "birthday");
+
+  const loading = feedQuery.isLoading || familyQuery.isLoading;
+  const error = feedQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
 
   useEffect(() => {
     if (familyQuery.isFetched && !familyQuery.data) {
@@ -561,16 +619,15 @@ export default function FeedScreen() {
   const handleRefresh = () => {
     console.log("[Feed] Pull to refresh triggered");
     setRefreshing(true);
-    Promise.all([postsQuery.refetch(), familyQuery.refetch(), todayMemoryQuery.refetch()]).finally(() => {
+    Promise.all([feedQuery.refetch(), familyQuery.refetch()]).finally(() => {
       setRefreshing(false);
     });
   };
 
   const handleRetry = () => {
     console.log("[Feed] Retry button pressed");
-    postsQuery.refetch();
+    feedQuery.refetch();
     familyQuery.refetch();
-    todayMemoryQuery.refetch();
   };
 
   const renderHeader = () => (
@@ -610,6 +667,11 @@ export default function FeedScreen() {
           onSelect={setSelectedAuthorId}
         />
       )}
+
+      {/* Birthday cards */}
+      {birthdayItems.map((item) => (
+        <BirthdayCard key={item.member.id} item={item} />
+      ))}
     </View>
   );
 

@@ -28,6 +28,7 @@ export interface FamilyMember {
   name: string;
   image?: string;
   email?: string;
+  birthday?: string;
 }
 
 export interface Family {
@@ -47,3 +48,13 @@ export interface TodayMemory {
   year: number;
   post: Post;
 }
+
+export interface FeedItemPost { kind: 'post'; post: Post }
+export interface FeedItemMemory { kind: 'memory'; year: number; post: Post }
+export interface FeedItemBirthday {
+  kind: 'birthday';
+  member: { id: string; name: string; image?: string; birthday: string };
+  daysUntil: number;
+  age: number | null;
+}
+export type FeedItem = FeedItemPost | FeedItemMemory | FeedItemBirthday;

@@ -28,6 +28,94 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+function computeDaysUntilBirthday(birthdayStr: string): number {
+  const today = new Date();
+  const todayMonth = today.getMonth() + 1;
+  const todayDay = today.getDate();
+
+  const parts = birthdayStr.split("-");
+  const bMonth = parseInt(parts[1] ?? "1", 10);
+  const bDay = parseInt(parts[2] ?? "1", 10);
+
+  const todayDayOfYear = todayMonth * 100 + todayDay;
+  const bDayOfYear = bMonth * 100 + bDay;
+
+  if (bDayOfYear >= todayDayOfYear) {
+    // Birthday is later this year
+    const thisYearBirthday = new Date(today.getFullYear(), bMonth - 1, bDay);
+    const diff = thisYearBirthday.getTime() - new Date(today.getFullYear(), todayMonth - 1, todayDay).getTime();
+    return Math.round(diff / (1000 * 60 * 60 * 24));
+  } else {
+    // Birthday is next year
+    const nextYearBirthday = new Date(today.getFullYear() + 1, bMonth - 1, bDay);
+    const diff = nextYearBirthday.getTime() - new Date(today.getFullYear(), todayMonth - 1, todayDay).getTime();
+    return Math.round(diff / (1000 * 60 * 60 * 24));
+  }
+}
+
+function BirthdayBanner({ members }: { members: FamilyMember[] }) {
+  const upcomingMembers = useMemo(() => {
+    return members
+      .filter((m) => !!m.birthday)
+      .map((m) => ({ member: m, daysUntil: computeDaysUntilBirthday(m.birthday!) }))
+      .filter((entry) => entry.daysUntil <= 7)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [members]);
+
+  if (upcomingMembers.length === 0) return null;
+
+  return (
+    <View style={{ marginBottom: 24 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginBottom: 12 }}>
+        <Text style={{ fontSize: 18 }}>🎂</Text>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.text }}>
+          Bald Geburtstag
+        </Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+      >
+        {upcomingMembers.map(({ member, daysUntil }) => {
+          let statusText: string;
+          if (daysUntil === 0) {
+            statusText = "Heute!";
+          } else if (daysUntil === 1) {
+            statusText = "Morgen!";
+          } else {
+            statusText = "in " + daysUntil + " Tagen";
+          }
+
+          return (
+            <View
+              key={member.id}
+              style={{
+                backgroundColor: "#FFF8E7",
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "#FFD166",
+                padding: 12,
+                alignItems: "center",
+                gap: 6,
+                minWidth: 90,
+              }}
+            >
+              <AuthorAvatar author={member} size={36} />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#7A4F00", textAlign: "center" }} numberOfLines={1}>
+                {member.name.split(" ")[0]}
+              </Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#B07800", textAlign: "center" }}>
+                {statusText}
+              </Text>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 function EmptyStateNoData() {
   const router = useRouter();
   const headline = "✨ Eure Familiengeschichte beginnt hier";
@@ -312,6 +400,8 @@ export default function MemoriesScreen() {
   const hasPostsButNoneForYear = !loading && allPosts.length > 0 && filteredPosts.length === 0;
   const noDataText = "Keine Erinnerungen für " + selectedYear;
 
+  const familyMembers = family?.members ?? [];
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <ScrollView
@@ -337,6 +427,11 @@ export default function MemoriesScreen() {
 
         {/* Full empty state — no posts at all */}
         {hasNoPosts && <EmptyStateNoData />}
+
+        {/* Birthday Banner */}
+        {!hasNoPosts && familyMembers.length > 0 && (
+          <BirthdayBanner members={familyMembers} />
+        )}
 
         {/* Today's Memories */}
         {!hasNoPosts && (
