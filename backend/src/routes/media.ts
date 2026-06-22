@@ -322,6 +322,7 @@ export function registerMediaRoutes(app: App) {
             type: 'object',
             properties: {
               public_url: { type: 'string' },
+              url: { type: 'string' },
               key: { type: 'string' },
             },
           },
@@ -403,6 +404,7 @@ export function registerMediaRoutes(app: App) {
 
         return {
           public_url: publicUrl,
+          url: publicUrl,
           key,
         };
       } catch (error) {

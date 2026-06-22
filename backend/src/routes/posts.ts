@@ -422,17 +422,9 @@ export function registerPostsRoutes(app: App) {
 
       if (process.env.OPENROUTER_API_KEY) {
         try {
-          const eventDate = post[0].event_date
-            ? new Date(post[0].event_date).toISOString().split('T')[0]
-            : '';
+          const systemPrompt = `Du bist ein Familienchronist. Verbessere den folgenden Text sprachlich — mach ihn lebendiger, wärmer und persönlicher. Füge KEINE neuen Fakten, Ereignisse oder Personen hinzu, die nicht im Original stehen. Behalte den Inhalt exakt bei. Maximal 60 Wörter. Antworte NUR mit einem JSON-Objekt: {"title": "...", "story": "..."}`;
 
-          const userPrompt = `Du erhältst einzelne Erinnerungen als Stichworte. Erstelle daraus einen kurzen, persönlichen Text von max. 60 Wörtern. Verwende ausschließlich die angegebenen Informationen. Ergänze keine neuen Ereignisse. Schreibe in einem warmen, familiären Ton.
-
-Stichworte: ${post[0].raw_text || ''}
-Datum: ${eventDate}
-
-Antworte NUR mit einem JSON-Objekt (kein Markdown, keine Code-Blöcke):
-{"title": "Kurzer Titel (max 40 Zeichen)", "story": "Text (max. 60 Wörter)"}`;
+          const userPrompt = post[0].raw_text || '';
 
           // Find first image media if available
           const imageMedia = mediaRows.find((m) => m.type === 'image');
@@ -463,6 +455,10 @@ Antworte NUR mit einem JSON-Objekt (kein Markdown, keine Code-Blöcke):
             body: JSON.stringify({
               model: 'google/gemini-2.0-flash-001',
               messages: [
+                {
+                  role: 'system',
+                  content: systemPrompt,
+                },
                 {
                   role: 'user',
                   content: messageContent,
