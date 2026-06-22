@@ -12,7 +12,13 @@ export const app = await createApplication(schema);
 
 export type App = typeof app;
 
-app.withAuth();
+app.withAuth({
+  trustedOrigins: [
+    "https://zaxn23y279j7wdx9qaka72k3nvvaxnpg.app.specular.dev",
+    "https://2b74c067-e8de-4846-ada9-033ab988fdfb.newly.dev",
+    "famly://",
+  ],
+});
 app.withStorage();
 
 registerFamiliesRoutes(app);
