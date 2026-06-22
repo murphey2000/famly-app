@@ -25,6 +25,7 @@ export const family_members = pgTable('family_members', {
   user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   role: text('role').notNull(),
   joined_at: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+  birthday: text('birthday'),
 }, (table) => [
   check('role_check', sql`"role" IN ('admin', 'member')`),
   unique('family_members_unique').on(table.family_id, table.user_id),

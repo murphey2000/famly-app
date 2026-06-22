@@ -883,6 +883,36 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // Profile - Birthday
+  test("Update user birthday", async () => {
+    const res = await authenticatedApi("/api/profile/birthday", authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ birthday: "1990-05-15" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Update birthday with missing birthday returns 400", async () => {
+    const res = await authenticatedApi("/api/profile/birthday", authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Update birthday without auth returns 401", async () => {
+    const res = await api("/api/profile/birthday", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ birthday: "1990-05-15" }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // Newsletter
   test("Generate newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/generate", authToken, {
@@ -951,6 +981,19 @@ describe("API Integration Tests", () => {
 
   test("Get latest newsletter without auth returns 401", async () => {
     const res = await api("/api/newsletter/latest");
+    await expectStatus(res, 401);
+  });
+
+  // Feed
+  test("Get family feed", async () => {
+    const res = await authenticatedApi("/api/feed", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("Get family feed without auth returns 401", async () => {
+    const res = await api("/api/feed");
     await expectStatus(res, 401);
   });
 });

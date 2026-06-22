@@ -389,4 +389,56 @@ Respond in JSON with this exact structure:
       return newsletters[newsletters.length - 1];
     }
   );
+
+  app.fastify.patch(
+    '/api/profile/birthday',
+    {
+      schema: {
+        description: 'Update current user birthday',
+        tags: ['profile'],
+        body: {
+          type: 'object',
+          required: ['birthday'],
+          properties: {
+            birthday: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+            },
+          },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: { birthday: string } }>, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ userId: session.user.id, birthday: request.body.birthday }, 'Updating user birthday');
+
+      const familyMember = await app.db
+        .select()
+        .from(schema.family_members)
+        .where(eq(schema.family_members.user_id, session.user.id))
+        .limit(1);
+
+      if (!familyMember.length) {
+        return reply.status(404).send({ error: 'No family found' });
+      }
+
+      await app.db
+        .update(schema.family_members)
+        .set({ birthday: request.body.birthday })
+        .where(eq(schema.family_members.id, familyMember[0].id));
+
+      app.logger.info({ userId: session.user.id }, 'Birthday updated successfully');
+
+      return { success: true };
+    }
+  );
 }

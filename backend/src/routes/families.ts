@@ -102,6 +102,7 @@ export function registerFamiliesRoutes(app: App) {
                     user_id: { type: 'string' },
                     role: { type: 'string' },
                     joined_at: { type: 'string', format: 'date-time' },
+                    birthday: { type: ['string', 'null'] },
                     user: {
                       type: 'object',
                       properties: {
@@ -167,6 +168,7 @@ export function registerFamiliesRoutes(app: App) {
             user_id: m.user_id,
             role: m.role,
             joined_at: m.joined_at,
+            birthday: m.birthday,
             user: {
               id: usr[0].id,
               name: usr[0].name,
