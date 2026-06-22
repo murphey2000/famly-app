@@ -84,7 +84,7 @@ export default function PostDetailScreen() {
       setPost({ ...data, text: (data as any).raw_text ?? (data as any).text ?? "" });
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     } catch (err: any) {
-      console.error("[PostDetail] Load error:", err);
+      console.error("[PostDetail] Load error:", err?.message ?? String(err), err);
       setError(err?.message || "Beitrag konnte nicht geladen werden");
     } finally {
       setLoading(false);
