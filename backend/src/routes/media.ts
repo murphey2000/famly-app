@@ -384,7 +384,9 @@ export function registerMediaRoutes(app: App) {
         // If storage API is configured, upload the file
         if (process.env.STORAGE_API_BASE_URL) {
           try {
-            const uploadUrl = `${process.env.STORAGE_API_BASE_URL}/upload?key=${encodeURIComponent(key)}&content_type=${encodeURIComponent(mimetype)}`;
+            const uploadUrl = `${process.env.STORAGE_API_BASE_URL}/upload?key=${encodeURIComponent(key)}`;
+
+            app.logger.info({ mimetype, bufferSize: buffer.length }, 'Uploading to storage API');
 
             const uploadResponse = await fetch(uploadUrl, {
               method: 'PUT',
@@ -393,10 +395,12 @@ export function registerMediaRoutes(app: App) {
             });
 
             if (!uploadResponse.ok) {
-              app.logger.warn({ status: uploadResponse.status }, 'Storage API returned non-OK status, but continuing');
+              app.logger.error({ status: uploadResponse.status, mimetype }, 'Storage API returned non-OK status');
+              return reply.status(500).send({ error: `Storage upload failed with status ${uploadResponse.status}` });
             }
           } catch (uploadError) {
-            app.logger.warn({ err: uploadError }, 'Storage upload failed, using mock URL');
+            app.logger.error({ err: uploadError }, 'Storage upload failed');
+            return reply.status(500).send({ error: 'Storage upload failed' });
           }
         }
 
