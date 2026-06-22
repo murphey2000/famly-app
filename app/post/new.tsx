@@ -189,7 +189,11 @@ export default function NewPostScreen() {
       console.error("[NewPost] Delete draft error:", err);
     }
     setPreviewState(null);
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/(home)");
+    }
   };
 
   const handlePublish = async () => {
@@ -239,7 +243,11 @@ export default function NewPostScreen() {
         <AnimatedPressable
           onPress={() => {
             console.log("[NewPost] Close button pressed");
-            router.back();
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)/(home)");
+            }
           }}
           style={{
             width: 36,

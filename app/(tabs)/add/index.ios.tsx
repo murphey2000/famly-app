@@ -7,7 +7,7 @@ export default function AddTab() {
 
   useEffect(() => {
     console.log("[Add Tab] Redirecting to /post/new");
-    router.replace("/post/new");
+    router.push("/post/new");
   }, []);
 
   return null;
