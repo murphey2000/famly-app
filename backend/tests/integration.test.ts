@@ -228,6 +228,22 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Add media with invalid post UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid/media",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "photo",
+          url: "https://example.com/photo.jpg",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Add media without auth returns 401", async () => {
     const res = await api(`/api/posts/${postId}/media`, {
       method: "POST",
@@ -349,6 +365,17 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Generate preview with invalid post UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid/generate-preview",
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Generate preview without auth returns 401", async () => {
     const res = await api(
       `/api/posts/${postId}/generate-preview`,
@@ -424,6 +451,22 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Publish post with invalid post UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid/publish",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_title: "Test AI Title",
+          ai_story: "Test AI Story",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
   });
 
   test("Publish post without auth returns 401", async () => {

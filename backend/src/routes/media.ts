@@ -375,36 +375,42 @@ export function registerMediaRoutes(app: App) {
 
         // Generate storage key
         const uniqueId = Math.random().toString(36).substring(2, 15);
-        const key = `media/${session.user.id}/${uniqueId}/${filename}`;
+        const key = `uploads/${session.user.id}/${uniqueId}_${filename}`;
 
-        // Construct public URL
-        const baseUrl = process.env.STORAGE_API_BASE_URL || 'https://storage.example.com';
-        const publicUrl = `${baseUrl}/public/${key}`;
-
-        // If storage API is configured, upload the file
-        if (process.env.STORAGE_API_BASE_URL) {
+        // Upload the file to storage API
+        const storageBaseUrl = process.env.STORAGE_API_BASE_URL;
+        if (!storageBaseUrl) {
+          app.logger.warn({ filename, key }, 'STORAGE_API_BASE_URL not configured, using mock URL');
+        } else {
           try {
-            const uploadUrl = `${process.env.STORAGE_API_BASE_URL}/upload?key=${encodeURIComponent(key)}`;
+            const uploadUrl = `${storageBaseUrl}/upload?key=${encodeURIComponent(key)}&content_type=${encodeURIComponent(mimetype)}`;
 
-            app.logger.info({ mimetype, bufferSize: buffer.length }, 'Uploading to storage API');
+            app.logger.info({ key, mimetype, bufferSize: buffer.length }, 'Uploading to storage API');
 
             const uploadResponse = await fetch(uploadUrl, {
               method: 'PUT',
-              headers: { 'Content-Type': mimetype },
+              headers: { 'Content-Type': 'application/octet-stream' },
               body: buffer,
             });
 
             if (!uploadResponse.ok) {
-              app.logger.error({ status: uploadResponse.status, mimetype }, 'Storage API returned non-OK status');
-              return reply.status(500).send({ error: `Storage upload failed with status ${uploadResponse.status}` });
+              const errorText = await uploadResponse.text();
+              app.logger.error({ status: uploadResponse.status, key, mimetype, error: errorText }, 'Storage API upload failed');
+              return reply.status(uploadResponse.status).send({ error: `Storage upload failed: ${errorText || uploadResponse.statusText}` });
             }
+
+            app.logger.info({ key }, 'File uploaded to storage successfully');
           } catch (uploadError) {
-            app.logger.error({ err: uploadError }, 'Storage upload failed');
-            return reply.status(500).send({ error: 'Storage upload failed' });
+            app.logger.error({ err: uploadError, key }, 'Storage API request failed');
+            return reply.status(500).send({ error: 'Storage API request failed' });
           }
         }
 
-        app.logger.info({ filename, key }, 'File upload completed successfully');
+        // Generate signed GET URL
+        const baseUrl = storageBaseUrl || 'https://storage.example.com';
+        const publicUrl = `${baseUrl}/public/${key}`;
+
+        app.logger.info({ filename, key, publicUrl }, 'File upload completed successfully');
 
         return {
           public_url: publicUrl,
