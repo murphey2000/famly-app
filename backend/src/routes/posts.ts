@@ -18,6 +18,7 @@ export function registerPostsRoutes(app: App) {
           properties: {
             limit: { type: 'integer', default: 20 },
             offset: { type: 'integer', default: 0 },
+            author_id: { type: 'string' },
           },
         },
         response: {
@@ -74,7 +75,7 @@ export function registerPostsRoutes(app: App) {
       },
     },
     async (
-      request: FastifyRequest<{ Querystring: { limit?: string; offset?: string } }>,
+      request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; author_id?: string } }>,
       reply: FastifyReply
     ) => {
       const session = await requireAuth(request, reply);
@@ -82,8 +83,9 @@ export function registerPostsRoutes(app: App) {
 
       const limit = Math.min(parseInt(request.query.limit || '20', 10), 100);
       const offset = parseInt(request.query.offset || '0', 10);
+      const authorIdFilter = request.query.author_id;
 
-      app.logger.info({ userId: session.user.id, limit, offset }, 'Fetching posts');
+      app.logger.info({ userId: session.user.id, limit, offset, authorIdFilter }, 'Fetching posts');
 
       const familyMember = await app.db
         .select()
@@ -98,7 +100,14 @@ export function registerPostsRoutes(app: App) {
       const postsData = await app.db
         .select()
         .from(schema.posts)
-        .where(eq(schema.posts.family_id, familyMember[0].family_id))
+        .where(
+          authorIdFilter
+            ? and(
+                eq(schema.posts.family_id, familyMember[0].family_id),
+                eq(schema.posts.author_id, authorIdFilter)
+              )
+            : eq(schema.posts.family_id, familyMember[0].family_id)
+        )
         .orderBy(desc(schema.posts.created_at))
         .limit(limit)
         .offset(offset);
@@ -106,7 +115,14 @@ export function registerPostsRoutes(app: App) {
       const totalResult = await app.db
         .select()
         .from(schema.posts)
-        .where(eq(schema.posts.family_id, familyMember[0].family_id));
+        .where(
+          authorIdFilter
+            ? and(
+                eq(schema.posts.family_id, familyMember[0].family_id),
+                eq(schema.posts.author_id, authorIdFilter)
+              )
+            : eq(schema.posts.family_id, familyMember[0].family_id)
+        );
 
       // Batch query all unique author IDs
       const authorIds = [...new Set(postsData.map((p) => p.author_id))];

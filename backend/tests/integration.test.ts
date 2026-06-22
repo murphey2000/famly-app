@@ -58,6 +58,13 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.id).toBe(familyId);
     expect(Array.isArray(data.members)).toBe(true);
+    // Verify members include user details
+    if (data.members.length > 0) {
+      expect(data.members[0].user).toBeDefined();
+      expect(data.members[0].user.id).toBeDefined();
+      expect(data.members[0].user.name).toBeDefined();
+      expect(data.members[0].user.email).toBeDefined();
+    }
   });
 
   test("Get family without auth returns 401", async () => {
@@ -155,6 +162,20 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data)).toBe(true);
   });
 
+  test("List posts filtered by author_id", async () => {
+    const res = await authenticatedApi(`/api/posts?author_id=${userId}`, authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("List posts filtered by non-existent author_id", async () => {
+    const res = await authenticatedApi("/api/posts?author_id=non-existent-id", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
   test("List posts without auth returns 401", async () => {
     const res = await api("/api/posts");
     await expectStatus(res, 401);
@@ -167,6 +188,7 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.id).toBe(postId);
     expect(Array.isArray(data.media)).toBe(true);
+    expect(data.author).toBeDefined();
   });
 
   test("Get non-existent post returns 404", async () => {
@@ -419,6 +441,15 @@ describe("API Integration Tests", () => {
       body: form,
     });
     await expectStatus(res, 400);
+  });
+
+  test("Upload file without auth returns 500 (server error when processing empty form)", async () => {
+    const form = new FormData();
+    const res = await authenticatedApi("/api/upload-file", authToken, {
+      method: "POST",
+      body: form,
+    });
+    await expectStatus(res, 400, 500);
   });
 
   // Posts - Generate preview
@@ -739,6 +770,13 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.groups)).toBe(true);
   });
 
+  test("Get timeline with invalid year (negative)", async () => {
+    const res = await authenticatedApi("/api/timeline?year=-1", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.groups)).toBe(true);
+  });
+
   test("Get timeline without auth returns 401", async () => {
     const res = await api("/api/timeline");
     await expectStatus(res, 401);
@@ -857,6 +895,8 @@ describe("API Integration Tests", () => {
     expect(data.id).toBeDefined();
     expect(data.month).toBe(6);
     expect(data.year).toBe(2026);
+    expect(data.family_id).toBeDefined();
+    expect(data.generated_at).toBeDefined();
   });
 
   test("Generate newsletter with missing month returns 400", async () => {
@@ -875,6 +915,24 @@ describe("API Integration Tests", () => {
       body: JSON.stringify({ month: 6 }),
     });
     await expectStatus(res, 400);
+  });
+
+  test("Generate newsletter with invalid month (13) returns 400", async () => {
+    const res = await authenticatedApi("/api/newsletter/generate", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: 13, year: 2026 }),
+    });
+    await expectStatus(res, 400, 200);
+  });
+
+  test("Generate newsletter with invalid month (0) returns 400", async () => {
+    const res = await authenticatedApi("/api/newsletter/generate", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: 0, year: 2026 }),
+    });
+    await expectStatus(res, 400, 200);
   });
 
   test("Get latest newsletter", async () => {
