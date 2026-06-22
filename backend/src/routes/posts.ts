@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, ne, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
+import { refreshMediaUrl } from '../lib/storage-utils.js';
 
 export function registerPostsRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -168,8 +169,8 @@ export function registerPostsRoutes(app: App) {
             family_id: m.family_id,
             uploader_id: m.uploader_id,
             type: m.type,
-            url: m.url,
-            thumbnail_url: m.thumbnail_url,
+            url: refreshMediaUrl(m.url, m.storage_key),
+            thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
             created_at: m.created_at,
           })),
         };
@@ -349,8 +350,8 @@ export function registerPostsRoutes(app: App) {
           family_id: m.family_id,
           uploader_id: m.uploader_id,
           type: m.type,
-          url: m.url,
-          thumbnail_url: m.thumbnail_url,
+          url: refreshMediaUrl(m.url, m.storage_key),
+          thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
           created_at: m.created_at,
         })),
       };

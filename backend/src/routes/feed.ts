@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
+import { refreshMediaUrl } from '../lib/storage-utils.js';
 
 export function registerFeedRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -211,9 +212,9 @@ export function registerFeedRoutes(app: App) {
           },
           media: media.map((m) => ({
             id: m.id,
-            url: m.url,
+            url: refreshMediaUrl(m.url, m.storage_key),
             type: m.type,
-            thumbnail_url: m.thumbnail_url,
+            thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
           })),
         });
 
@@ -248,9 +249,9 @@ export function registerFeedRoutes(app: App) {
                   },
                   media: media.map((m) => ({
                     id: m.id,
-                    url: m.url,
+                    url: refreshMediaUrl(m.url, m.storage_key),
                     type: m.type,
-                    thumbnail_url: m.thumbnail_url,
+                    thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
                   })),
                 },
               });

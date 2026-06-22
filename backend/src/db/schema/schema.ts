@@ -55,6 +55,8 @@ export const media = pgTable('media', {
   type: text('type').notNull(),
   url: text('url').notNull(),
   thumbnail_url: text('thumbnail_url'),
+  storage_key: text('storage_key'),
+  thumbnail_key: text('thumbnail_key'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   check('media_type_check', sql`"type" IN ('photo', 'video', 'audio')`),

@@ -4,6 +4,7 @@ import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
 import sharp from 'sharp';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
+import { generatePublicUrl } from '../lib/storage-utils.js';
 
 export function registerMediaRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -342,6 +343,19 @@ export function registerMediaRoutes(app: App) {
       app.logger.info({ userId: session.user.id }, 'File upload endpoint called');
 
       try {
+        // Get user's family
+        const familyMember = await app.db
+          .select()
+          .from(schema.family_members)
+          .where(eq(schema.family_members.user_id, session.user.id))
+          .limit(1);
+
+        if (!familyMember.length) {
+          return reply.status(404).send({ error: 'No family found' });
+        }
+
+        const familyId = familyMember[0].family_id;
+
         // Try to get the file from the request
         let data: any;
         try {
@@ -396,25 +410,26 @@ export function registerMediaRoutes(app: App) {
         // Generate storage key with sanitized filename
         const uniqueId = crypto.randomUUID();
         const safeFilename = filename.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._\-]/g, '');
-        const key = `uploads/${session.user.id}/${uniqueId}_${safeFilename}`;
+        const fileExtension = safeFilename.split('.').pop() || 'bin';
+        const storageKey = `media/${familyId}/${uniqueId}.${fileExtension}`;
 
-        // Upload the file to S3 storage
-        app.logger.info({ key, mimetype, bufferSize: buffer.length }, 'Uploading to S3 storage');
+        // Upload the file to S3 storage as public
+        app.logger.info({ storageKey, mimetype, bufferSize: buffer.length }, 'Uploading to S3 storage (public)');
 
         try {
-          const uploadedKey = await app.storage.upload(key, buffer);
-          app.logger.info({ uploadedKey }, 'File uploaded to S3 successfully');
+          const uploadedKey = await app.storage.upload(storageKey, buffer);
+          app.logger.info({ uploadedKey }, 'File uploaded to S3 successfully (public)');
 
-          // Generate a signed URL for client access
-          const { url } = await app.storage.getSignedUrl(uploadedKey);
-          app.logger.info({ filename, uploadedKey, url }, 'File upload completed successfully');
+          // Generate permanent public URL
+          const publicUrl = generatePublicUrl(uploadedKey);
+          app.logger.info({ filename, uploadedKey, publicUrl }, 'File upload completed successfully');
 
           return {
-            url,
-            public_url: url,
+            url: publicUrl,
+            public_url: publicUrl,
           };
         } catch (uploadError) {
-          app.logger.error({ err: uploadError, key }, 'S3 storage upload failed');
+          app.logger.error({ err: uploadError, storageKey }, 'S3 storage upload failed');
           return reply.status(500).send({ error: 'File upload failed' });
         }
       } catch (error) {
