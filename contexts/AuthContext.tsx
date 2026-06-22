@@ -164,9 +164,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setBearerToken(token);
       await fetchUser();
     } else {
+      console.log("[AuthContext] signInWithSocial called for provider:", provider);
       const { data, error } = await authClient.signIn.social({
         provider,
-        callbackURL: "/auth-callback",
+        callbackURL: "famly://auth-callback",
       });
       if (error) {
         throw new Error(error.message || "Social sign in failed");
