@@ -1,7 +1,5 @@
 import React from "react";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
-import { Pressable, View } from "react-native";
-import { COLORS } from "@/constants/Colors";
 
 export default function TabLayoutIOS() {
   return (
@@ -16,7 +14,6 @@ export default function TabLayoutIOS() {
         <Label>Erinnerungen</Label>
       </NativeTabs.Trigger>
 
-      {/* Navigation to /post/new is handled by app/(tabs)/add/index.tsx on focus */}
       <NativeTabs.Trigger name="add">
         <Icon sf="plus.circle.fill" />
         <Label>Hinzufügen</Label>

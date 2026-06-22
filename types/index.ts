@@ -26,6 +26,7 @@ export interface Post {
 export interface FamilyMember {
   id: string;
   name: string;
+  display_name?: string;
   image?: string;
   email?: string;
   birthday?: string;
