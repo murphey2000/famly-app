@@ -2,20 +2,24 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
+  TextInput,
   ScrollView,
   Animated,
   Alert,
   Modal,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
-import { ArrowLeft, Trash2, Tag } from "lucide-react-native";
+import { ArrowLeft, Trash2, Tag, Edit2 } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { apiGet, apiDelete } from "@/utils/api";
+import { apiGet, apiDelete, apiPatch } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatFullDate, formatRelativeDate } from "@/utils/dateUtils";
 import { SkeletonLine } from "@/components/SkeletonLine";
@@ -72,6 +76,10 @@ export default function PostDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editStory, setEditStory] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -109,6 +117,30 @@ export default function PostDetailScreen() {
   const handleDelete = () => {
     console.log("[PostDetail] Delete button pressed for post:", id);
     setShowDeleteModal(true);
+  };
+
+  const handleEdit = () => {
+    console.log("[PostDetail] Edit button pressed for post:", id);
+    setEditTitle(post?.ai_title ?? "");
+    setEditStory(post?.ai_story ?? post?.text ?? "");
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    console.log("[PostDetail] Save edit pressed — title:", editTitle.slice(0, 60));
+    try {
+      setIsSaving(true);
+      console.log("[PostDetail] PATCH /api/posts/" + id);
+      await apiPatch(`/api/posts/${id}`, { ai_title: editTitle, ai_story: editStory });
+      console.log("[PostDetail] Post updated successfully");
+      setPost((prev) => prev ? { ...prev, ai_title: editTitle, ai_story: editStory } : prev);
+      setShowEditModal(false);
+    } catch (err: any) {
+      console.error("[PostDetail] Save edit error:", err);
+      Alert.alert("Fehler", err?.message || "Konnte nicht gespeichert werden");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -226,19 +258,34 @@ export default function PostDetailScreen() {
               <ArrowLeft size={20} color={COLORS.text} />
             </AnimatedPressable>
             {isAuthor && (
-              <AnimatedPressable
-                onPress={handleDelete}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: COLORS.dangerMuted,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Trash2 size={18} color={COLORS.danger} />
-              </AnimatedPressable>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <AnimatedPressable
+                  onPress={handleEdit}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: COLORS.primaryMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Edit2 size={18} color={COLORS.primary} />
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={handleDelete}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: COLORS.dangerMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Trash2 size={18} color={COLORS.danger} />
+                </AnimatedPressable>
+              </View>
             )}
           </View>
         )}
@@ -328,6 +375,120 @@ export default function PostDetailScreen() {
           </View>
         </Modal>
 
+        {/* Edit modal */}
+        <Modal
+          visible={showEditModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            console.log("[PostDetail] Edit modal dismissed via back gesture");
+            setShowEditModal(false);
+          }}
+        >
+          <KeyboardAvoidingView
+            style={{ flex: 1, backgroundColor: COLORS.background }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            {/* Modal Header */}
+            <View
+              style={{
+                paddingTop: insets.top + 12,
+                paddingHorizontal: 16,
+                paddingBottom: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottomWidth: 1,
+                borderBottomColor: COLORS.divider,
+                backgroundColor: COLORS.surface,
+              }}
+            >
+              <AnimatedPressable
+                onPress={() => {
+                  console.log("[PostDetail] Edit modal Abbrechen pressed");
+                  setShowEditModal(false);
+                }}
+                style={{
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                }}
+              >
+                <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: "600" }}>
+                  Abbrechen
+                </Text>
+              </AnimatedPressable>
+
+              <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.text }}>
+                Moment bearbeiten
+              </Text>
+
+              <AnimatedPressable
+                onPress={handleSaveEdit}
+                disabled={isSaving}
+                style={{
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  backgroundColor: isSaving ? COLORS.surfaceSecondary : COLORS.primary,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {isSaving && <ActivityIndicator size="small" color="#FFFFFF" />}
+                <Text style={{ color: isSaving ? COLORS.textTertiary : "#FFFFFF", fontSize: 15, fontWeight: "700" }}>
+                  Speichern
+                </Text>
+              </AnimatedPressable>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <TextInput
+                value={editTitle}
+                onChangeText={(val) => {
+                  console.log("[PostDetail] Edit title changed");
+                  setEditTitle(val);
+                }}
+                placeholder="Titel..."
+                placeholderTextColor={COLORS.textTertiary}
+                multiline
+                style={{
+                  fontSize: 22,
+                  fontWeight: "700",
+                  color: COLORS.text,
+                  lineHeight: 30,
+                  marginBottom: 16,
+                }}
+              />
+
+              <View style={{ height: 1, backgroundColor: COLORS.divider, marginBottom: 16 }} />
+
+              <TextInput
+                value={editStory}
+                onChangeText={(val) => {
+                  console.log("[PostDetail] Edit story changed, length:", val.length);
+                  setEditStory(val);
+                }}
+                placeholder="Geschichte..."
+                placeholderTextColor={COLORS.textTertiary}
+                multiline
+                textAlignVertical="top"
+                style={{
+                  fontSize: 16,
+                  color: COLORS.text,
+                  lineHeight: 26,
+                  minHeight: 120,
+                }}
+              />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </Modal>
+
         <ScrollView
           contentContainerStyle={{ paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
@@ -389,19 +550,34 @@ export default function PostDetailScreen() {
                   <ArrowLeft size={20} color="#FFFFFF" />
                 </AnimatedPressable>
                 {isAuthor && (
-                  <AnimatedPressable
-                    onPress={handleDelete}
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      backgroundColor: "rgba(0,0,0,0.4)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Trash2 size={18} color="#FFFFFF" />
-                  </AnimatedPressable>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <AnimatedPressable
+                      onPress={handleEdit}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: "rgba(0,0,0,0.4)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Edit2 size={18} color="#FFFFFF" />
+                    </AnimatedPressable>
+                    <AnimatedPressable
+                      onPress={handleDelete}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: "rgba(0,0,0,0.4)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Trash2 size={18} color="#FFFFFF" />
+                    </AnimatedPressable>
+                  </View>
                 )}
               </View>
             </View>

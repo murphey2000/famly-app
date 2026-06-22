@@ -346,20 +346,53 @@ export default function NewPostScreen() {
             </Text>
           </AnimatedPressable>
           {showDatePicker && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display={Platform.OS === "ios" ? "inline" : "default"}
-              onChange={(event, selectedDate) => {
-                if (Platform.OS === "android") setShowDatePicker(false);
-                if (selectedDate) {
-                  console.log("[NewPost] Date changed:", selectedDate.toISOString());
-                  setDate(selectedDate);
-                }
-              }}
-              maximumDate={new Date()}
-              style={{ marginTop: 8 }}
-            />
+            <View
+              style={
+                Platform.OS === "ios"
+                  ? {
+                      backgroundColor: COLORS.surface,
+                      borderRadius: 12,
+                      marginTop: 8,
+                      overflow: "hidden",
+                    }
+                  : undefined
+              }
+            >
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(event, selectedDate) => {
+                  if (Platform.OS === "android") setShowDatePicker(false);
+                  if (selectedDate) {
+                    console.log("[NewPost] Date changed:", selectedDate.toISOString());
+                    setDate(selectedDate);
+                  }
+                }}
+                maximumDate={new Date()}
+                style={{ marginTop: 0 }}
+              />
+              {Platform.OS === "ios" && (
+                <AnimatedPressable
+                  onPress={() => {
+                    console.log("[NewPost] Date picker confirmed (Fertig)");
+                    setShowDatePicker(false);
+                  }}
+                  style={{
+                    marginHorizontal: 16,
+                    marginBottom: 12,
+                    backgroundColor: COLORS.primary,
+                    borderRadius: 10,
+                    paddingVertical: 10,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "#FFFFFF", fontSize: 15, fontWeight: "700" }}>
+                    Fertig
+                  </Text>
+                </AnimatedPressable>
+              )}
+            </View>
           )}
         </View>
 

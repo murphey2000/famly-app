@@ -24,11 +24,18 @@ export function useFeed(authorId?: string) {
     queryKey: ["feed", authorId ?? "all"],
     queryFn: () => {
       console.log("[useFeed] Fetching feed from:", url);
-      return apiGet<any[]>(url).then((data) => {
-        const normalized = normalizeFeedItems(Array.isArray(data) ? data : []);
-        console.log("[useFeed] Feed loaded, items:", normalized.length);
-        return normalized;
-      });
+      return apiGet<any>(url)
+        .then((data) => {
+          console.log("[useFeed] Raw response:", JSON.stringify(data).slice(0, 200));
+          const items: any[] = Array.isArray(data) ? data : Array.isArray(data?.posts) ? data.posts : [];
+          const normalized = normalizeFeedItems(items);
+          console.log("[useFeed] Feed loaded, items:", normalized.length);
+          return normalized;
+        })
+        .catch((e) => {
+          console.error("[useFeed] fetch error:", e?.message, e);
+          throw e;
+        });
     },
     staleTime: 2 * 60 * 1000,
   });
