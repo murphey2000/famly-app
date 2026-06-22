@@ -3,7 +3,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
-import { refreshMediaUrl } from '../lib/storage-utils.js';
+import { resolveMediaUrl } from '../lib/storage-utils.js';
 
 export function registerFeedRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -210,12 +210,14 @@ export function registerFeedRoutes(app: App) {
             name: author?.name || '',
             image: author?.image || null,
           },
-          media: media.map((m) => ({
-            id: m.id,
-            url: refreshMediaUrl(m.url, m.storage_key),
-            type: m.type,
-            thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
-          })),
+          media: await Promise.all(
+            media.map(async (m) => ({
+              id: m.id,
+              url: await resolveMediaUrl(app.storage, m.url, m.storage_key),
+              type: m.type,
+              thumbnail_url: await resolveMediaUrl(app.storage, m.thumbnail_url, m.thumbnail_key),
+            }))
+          ),
         });
 
         postCount++;
@@ -247,12 +249,14 @@ export function registerFeedRoutes(app: App) {
                     name: author?.name || '',
                     image: author?.image || null,
                   },
-                  media: media.map((m) => ({
-                    id: m.id,
-                    url: refreshMediaUrl(m.url, m.storage_key),
-                    type: m.type,
-                    thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
-                  })),
+                  media: await Promise.all(
+                    media.map(async (m) => ({
+                      id: m.id,
+                      url: await resolveMediaUrl(app.storage, m.url, m.storage_key),
+                      type: m.type,
+                      thumbnail_url: await resolveMediaUrl(app.storage, m.thumbnail_url, m.thumbnail_key),
+                    }))
+                  ),
                 },
               });
             }
