@@ -253,6 +253,7 @@ export function registerPostsRoutes(app: App) {
         response: {
           200: {
             type: 'object',
+            additionalProperties: true,
             properties: {
               id: { type: 'string', format: 'uuid' },
               family_id: { type: 'string', format: 'uuid' },
@@ -265,11 +266,16 @@ export function registerPostsRoutes(app: App) {
               tags: { type: 'array', items: { type: 'string' } },
               created_at: { type: 'string', format: 'date-time' },
               updated_at: { type: 'string', format: 'date-time' },
-              author: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, image: { type: ['string', 'null'] } } },
+              author: {
+                type: 'object',
+                additionalProperties: true,
+                properties: { id: { type: 'string' }, name: { type: 'string' }, image: { type: ['string', 'null'] } },
+              },
               media: {
                 type: 'array',
                 items: {
                   type: 'object',
+                  additionalProperties: true,
                   properties: {
                     id: { type: 'string', format: 'uuid' },
                     post_id: { type: 'string', format: 'uuid' },
