@@ -10,19 +10,20 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
-import { Plus, Clock, ChevronRight } from "lucide-react-native";
+import { useQueryClient } from "@tanstack/react-query";
+import { Plus, Clock } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatRelativeDate } from "@/utils/dateUtils";
 import { SkeletonLine } from "@/components/SkeletonLine";
 import { InspirationChips } from "@/components/InspirationChips";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
+import { PostCard } from "@/components/PostCard";
 import { useFeed } from "@/hooks/useFeed";
 import { useFamily } from "@/hooks/useFamily";
-import type { Post, FamilyMember, FamilyStats, TodayMemory, FeedItemPost, FeedItemBirthday } from "@/types";
+import { useInfinitePosts } from "@/hooks/useInfinitePosts";
+import type { FamilyMember, FamilyStats, TodayMemory, FeedItemBirthday } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -161,170 +162,6 @@ function StatsRow({ stats }: { stats: FamilyStats }) {
   );
 }
 
-function PostCard({ post, index }: { post: Post; index: number }) {
-  const router = useRouter();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(16)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  const isProcessing = post.ai_status === "processing" || post.ai_status === "pending";
-  const media = post.media ?? [];
-  const relativeDate = formatRelativeDate(post.created_at);
-
-  const handlePress = () => {
-    console.log("[Feed] Post card pressed, id:", post.id);
-    router.push(`/post/${post.id}`);
-  };
-
-  return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      <AnimatedPressable
-        onPress={handlePress}
-        style={{
-          backgroundColor: COLORS.surface,
-          borderRadius: 16,
-          padding: 16,
-          marginHorizontal: 16,
-          marginBottom: 12,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-          boxShadow: COLORS.cardShadow,
-        }}
-      >
-        {/* Author row */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12, gap: 10 }}>
-          <AuthorAvatar author={post.author} size={40} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: COLORS.text }}>
-              {post.author.name || "Unbekannt"}
-            </Text>
-            <Text style={{ fontSize: 12, color: COLORS.textTertiary }}>
-              {relativeDate}
-            </Text>
-          </View>
-          <ChevronRight size={16} color={COLORS.textTertiary} />
-        </View>
-
-        {/* Title */}
-        {isProcessing ? (
-          <View style={{ gap: 8, marginBottom: 10 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: "600" }}>
-                KI schreibt...
-              </Text>
-            </View>
-            <SkeletonLine width="75%" height={20} />
-            <SkeletonLine width="100%" height={13} />
-            <SkeletonLine width="60%" height={13} />
-          </View>
-        ) : (
-          <View style={{ marginBottom: 10 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "700",
-                color: COLORS.text,
-                letterSpacing: -0.3,
-                marginBottom: 6,
-                lineHeight: 24,
-              }}
-              numberOfLines={2}
-            >
-              {post.ai_title || post.text.slice(0, 60)}
-            </Text>
-            {post.ai_story ? (
-              <Text
-                style={{ fontSize: 15, color: COLORS.textSecondary, lineHeight: 24, fontWeight: "500" }}
-              >
-                {post.ai_story}
-              </Text>
-            ) : (
-              <Text
-                style={{ fontSize: 15, color: COLORS.textSecondary, lineHeight: 24, fontWeight: "500" }}
-                numberOfLines={3}
-              >
-                {post.text}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Media */}
-        {media.length > 0 && (
-          <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
-            {media.slice(0, 3).map((item, i) => (
-              <View key={item.id} style={{ flex: 1, position: "relative" }}>
-                {item.type === "video" ? (
-                  <Video
-                    source={{ uri: item.url }}
-                    style={{
-                      height: media.length === 1 ? 180 : 100,
-                      borderRadius: 10,
-                    }}
-                    useNativeControls
-                    resizeMode={ResizeMode.COVER}
-                  />
-                ) : (
-                  <Image
-                    source={resolveImageSource(item.url)}
-                    style={{
-                      height: media.length === 1 ? 180 : 100,
-                      borderRadius: 10,
-                    }}
-                    contentFit="cover"
-                  />
-                )}
-                {i === 2 && media.length > 3 && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      borderRadius: 10,
-                      backgroundColor: "rgba(0,0,0,0.5)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-                      +{media.length - 3}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Tags */}
-        {post.tags && post.tags.length > 0 && (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {post.tags.slice(0, 4).map((tag) => (
-              <View
-                key={tag}
-                style={{
-                  backgroundColor: COLORS.primaryMuted,
-                  borderRadius: 8,
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                }}
-              >
-                <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: "600" }}>
-                  {tag}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </AnimatedPressable>
-    </Animated.View>
-  );
-}
 
 function MemoryBanner({ memory }: { memory: TodayMemory }) {
   const router = useRouter();
@@ -573,18 +410,19 @@ export default function FeedScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const [stats, setStats] = useState<FamilyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
 
   const feedQuery = useFeed(selectedAuthorId);
   const familyQuery = useFamily();
+  const infinitePostsQuery = useInfinitePosts(selectedAuthorId);
 
   const feedItems = feedQuery.data ?? [];
   const family = familyQuery.data ?? null;
 
-  const postItems = feedItems.filter((item): item is FeedItemPost => item.kind === "post");
-  const posts = postItems.map((item) => item.post);
+  const posts = infinitePostsQuery.data?.pages.flatMap((page) => page.posts) ?? [];
 
   const firstMemoryItem = feedItems.find((item) => item.kind === "memory");
   const todayMemory: TodayMemory | null = firstMemoryItem && firstMemoryItem.kind === "memory"
@@ -593,8 +431,10 @@ export default function FeedScreen() {
 
   const birthdayItems = feedItems.filter((item): item is FeedItemBirthday => item.kind === "birthday");
 
-  const loading = feedQuery.isLoading || familyQuery.isLoading;
-  const error = feedQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
+  const loading = feedQuery.isLoading || familyQuery.isLoading || infinitePostsQuery.isLoading;
+  const error = feedQuery.isError || familyQuery.isError || infinitePostsQuery.isError
+    ? "Fehler beim Laden. Bitte versuche es erneut."
+    : null;
 
   useEffect(() => {
     if (familyQuery.isFetched && !familyQuery.data) {
@@ -619,15 +459,25 @@ export default function FeedScreen() {
   const handleRefresh = () => {
     console.log("[Feed] Pull to refresh triggered");
     setRefreshing(true);
-    Promise.all([feedQuery.refetch(), familyQuery.refetch()]).finally(() => {
+    queryClient.invalidateQueries({ queryKey: ["posts", "infinite"] });
+    queryClient.invalidateQueries({ queryKey: ["feed"] });
+    Promise.all([infinitePostsQuery.refetch(), feedQuery.refetch(), familyQuery.refetch()]).finally(() => {
       setRefreshing(false);
     });
   };
 
   const handleRetry = () => {
     console.log("[Feed] Retry button pressed");
+    infinitePostsQuery.refetch();
     feedQuery.refetch();
     familyQuery.refetch();
+  };
+
+  const handleLoadMore = () => {
+    if (infinitePostsQuery.hasNextPage && !infinitePostsQuery.isFetchingNextPage) {
+      console.log("[Feed] Loading next page");
+      infinitePostsQuery.fetchNextPage();
+    }
   };
 
   const renderHeader = () => (
@@ -718,6 +568,15 @@ export default function FeedScreen() {
         renderItem={({ item, index }) => <PostCard post={item} index={index} />}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={<EmptyState />}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.8}
+        ListFooterComponent={
+          infinitePostsQuery.isFetchingNextPage ? (
+            <View style={{ paddingVertical: 8 }}>
+              <PostCardSkeleton />
+            </View>
+          ) : null
+        }
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl

@@ -62,6 +62,17 @@ export const media = pgTable('media', {
   check('media_type_check', sql`"type" IN ('photo', 'video', 'audio')`),
 ]);
 
+export const post_reactions = pgTable('post_reactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  post_id: uuid('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  emoji: text('emoji').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check('emoji_check', sql`"emoji" IN ('👍', '❤️', '😂')`),
+  unique('post_reactions_post_user_unique').on(table.post_id, table.user_id),
+]);
+
 export const newsletters = pgTable('newsletters', {
   id: uuid('id').primaryKey().defaultRandom(),
   family_id: uuid('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }),

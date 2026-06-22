@@ -6,6 +6,12 @@ export interface Media {
   filename?: string;
 }
 
+export interface PostReaction {
+  emoji: string;
+  count: number;
+  userReacted: boolean;
+}
+
 export interface Post {
   id: string;
   text: string;
@@ -21,6 +27,7 @@ export interface Post {
     image?: string;
   };
   media: Media[];
+  reactions?: PostReaction[];
 }
 
 export interface FamilyMember {

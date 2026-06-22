@@ -36,6 +36,13 @@
       "when": 1782145552706,
       "tag": "20260622162552_chunky_bucky",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782158254719,
+      "tag": "20260622195734_boring_silver_fox",
+      "breakpoints": true
     }
   ]
 }
