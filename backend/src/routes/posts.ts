@@ -237,8 +237,18 @@ export function registerPostsRoutes(app: App) {
               tags: { type: 'array', items: { type: 'string' } },
               created_at: { type: 'string', format: 'date-time' },
               updated_at: { type: 'string', format: 'date-time' },
-              author: { type: 'object' },
-              media: { type: 'array', items: { type: 'object' } },
+              author: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, image: { type: ['string', 'null'] } } },
+              media: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    url: { type: 'string' },
+                    type: { type: 'string' },
+                  },
+                },
+              },
             },
           },
           404: { type: 'object', properties: { error: { type: 'string' } } },
