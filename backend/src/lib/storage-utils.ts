@@ -1,15 +1,30 @@
 import type { App } from '../index.js';
 
 /**
- * Build a permanent public URL from a storage key.
+ * Mint a fresh, readable URL for a stored object.
  *
- * The Specular storage proxy serves uploaded objects at
- * `${STORAGE_API_BASE_URL}/public/<key>`. STORAGE_API_BASE_URL is injected into
- * the backend at runtime (e.g. https://api.specular.dev/storage-proxy/<token>).
+ * Specular storage has NO permanent public URL. Objects are read via
+ * short-lived presigned URLs obtained from the storage proxy's download
+ * endpoint:
+ *
+ *   GET ${STORAGE_API_BASE_URL}/download?key=<key>  ->  { url, expiresAt }
+ *
+ * STORAGE_API_BASE_URL (e.g. https://api.specular.dev/storage-proxy/<token>)
+ * is injected into the backend at runtime and contains the access token in its
+ * path, so this call must only ever be made server-side.
  */
-export function generatePublicUrl(storageKey: string): string {
-  const base = process.env.STORAGE_API_BASE_URL || '';
-  return `${base}/public/${storageKey}`;
+export async function getSignedDownloadUrl(storageKey: string): Promise<string | null> {
+  const base = process.env.STORAGE_API_BASE_URL;
+  if (!base) return null;
+
+  try {
+    const res = await fetch(`${base}/download?key=${encodeURIComponent(storageKey)}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url?: string };
+    return data.url ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -34,11 +49,11 @@ export function extractStorageKey(
 }
 
 /**
- * Resolve a stored media reference to a readable public URL.
+ * Resolve a stored media reference to a fresh, readable presigned URL.
  *
- * When we know the storage key we regenerate the public URL from it (this
- * survives changes to STORAGE_API_BASE_URL); otherwise the stored URL is
- * already a usable public URL and is returned as-is.
+ * We mint a new presigned URL from the storage key on every read (they expire).
+ * If no key can be derived (e.g. an already-absolute external URL), the stored
+ * URL is returned as-is.
  *
  * `storage` is currently unused but kept in the signature so callers don't need
  * to change if storage-backed URL generation is reintroduced.
@@ -49,6 +64,7 @@ export async function resolveMediaUrl(
   storageKey: string | null | undefined
 ): Promise<string | null> {
   const key = extractStorageKey(url, storageKey);
-  if (key) return generatePublicUrl(key);
-  return url ?? null;
+  if (!key) return url ?? null;
+  const signed = await getSignedDownloadUrl(key);
+  return signed ?? url ?? null;
 }
