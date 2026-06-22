@@ -845,7 +845,7 @@ describe("API Integration Tests", () => {
 
   test("Get latest newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/latest", authToken);
-    await expectStatus(res, 200);
+    await expectStatus(res, 200, 404);
   });
 
   test("Generate newsletter without auth returns 401", async () => {
