@@ -9,6 +9,12 @@ export interface SelectedMedia {
   mediaType: "photo" | "video";
 }
 
+interface UploadFileResponse {
+  key?: string;
+  url?: string;
+  public_url?: string;
+}
+
 export async function uploadFile(
   media: SelectedMedia,
   backendUrl: string,
@@ -18,10 +24,12 @@ export async function uploadFile(
     media.fileName || `${media.mediaType}_${Date.now()}.${media.mediaType === "video" ? "mp4" : "jpg"}`;
   const contentType = media.mimeType || (media.mediaType === "video" ? "video/mp4" : "image/jpeg");
 
-  let publicUrl: string;
+  // Both platforms upload through the backend (/api/upload-file). The backend
+  // stores the file and returns its durable storage `key` plus a freshly
+  // signed `url` for immediate display.
+  let result: UploadFileResponse;
 
   if (Platform.OS === "web") {
-    // On web, upload directly to our backend to avoid CORS issues with storage proxy
     console.log("[Upload] Web: uploading via backend /api/upload-file");
     const token = await getBearerToken();
     const fileResponse = await fetch(media.uri);
@@ -42,39 +50,42 @@ export async function uploadFile(
       throw new Error(`Upload failed: ${uploadResponse.status} - ${text}`);
     }
 
-    const result = await uploadResponse.json();
-    console.log("[Upload] Web upload result:", JSON.stringify(result));
-    const url = result.public_url ?? result.url;
-    if (!url) {
-      throw new Error("Upload response missing URL: " + JSON.stringify(result));
-    }
-    publicUrl = url;
+    result = await uploadResponse.json();
   } else {
-    // On native, use signed URL + FileSystem.uploadAsync
-    console.log("[Upload] Native: uploading via signed URL");
-    const { upload_url, public_url } = await apiPost<{ upload_url: string; public_url: string }>(
-      "/api/upload-url",
-      { filename: fileName, content_type: contentType }
-    );
-    console.log("[Upload] Native upload-url response — upload_url:", upload_url, "public_url:", public_url);
+    console.log("[Upload] Native: uploading via backend /api/upload-file (multipart)");
+    const token = await getBearerToken();
 
-    const uploadResult = await FileSystem.uploadAsync(upload_url, media.uri, {
-      httpMethod: "PUT",
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      headers: { "Content-Type": contentType },
+    const uploadResult = await FileSystem.uploadAsync(`${backendUrl}/api/upload-file`, media.uri, {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: "file",
+      mimeType: contentType,
+      parameters: { filename: fileName, content_type: contentType },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
+
     if (uploadResult.status < 200 || uploadResult.status >= 300) {
-      throw new Error(`Upload failed: ${uploadResult.status}`);
+      throw new Error(`Upload failed: ${uploadResult.status} - ${uploadResult.body}`);
     }
-    publicUrl = public_url;
+
+    result = JSON.parse(uploadResult.body) as UploadFileResponse;
   }
 
-  console.log("[Upload] Registering media — postId:", postId, "url:", publicUrl, "type:", media.mediaType);
+  console.log("[Upload] Upload result:", JSON.stringify(result));
+  const displayUrl = result.public_url ?? result.url;
+  if (!displayUrl || !result.key) {
+    throw new Error("Upload response missing key/url: " + JSON.stringify(result));
+  }
+
+  // Persist the storage key (the durable reference) so the backend can mint a
+  // fresh signed URL every time the post is read.
+  console.log("[Upload] Registering media — postId:", postId, "key:", result.key, "type:", media.mediaType);
   await apiPost(`/api/posts/${postId}/media`, {
-    url: publicUrl,
+    url: displayUrl,
+    storage_key: result.key,
     type: media.mediaType,
     filename: fileName,
   });
 
-  return publicUrl;
+  return displayUrl;
 }
