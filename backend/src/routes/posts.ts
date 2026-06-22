@@ -22,46 +22,50 @@ export function registerPostsRoutes(app: App) {
         },
         response: {
           200: {
-            type: 'object',
-            properties: {
-              posts: {
-                type: 'array',
-                items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: true,
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                family_id: { type: 'string', format: 'uuid' },
+                author_id: { type: 'string' },
+                raw_text: { type: ['string', 'null'] },
+                ai_title: { type: ['string', 'null'] },
+                ai_story: { type: ['string', 'null'] },
+                ai_status: { type: 'string' },
+                event_date: { type: ['string', 'null'], format: 'date-time' },
+                tags: { type: ['array', 'null'], items: { type: 'string' } },
+                created_at: { type: 'string', format: 'date-time' },
+                updated_at: { type: 'string', format: 'date-time' },
+                media_count: { type: 'integer' },
+                author: {
                   type: 'object',
+                  additionalProperties: true,
                   properties: {
-                    id: { type: 'string', format: 'uuid' },
-                    family_id: { type: 'string', format: 'uuid' },
-                    author_id: { type: 'string' },
-                    raw_text: { type: ['string', 'null'] },
-                    ai_title: { type: ['string', 'null'] },
-                    ai_story: { type: ['string', 'null'] },
-                    ai_status: { type: 'string' },
-                    event_date: { type: ['string', 'null'], format: 'date-time' },
-                    tags: { type: 'array', items: { type: 'string' } },
-                    created_at: { type: 'string', format: 'date-time' },
-                    updated_at: { type: 'string', format: 'date-time' },
-                    author: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, image: { type: ['string', 'null'] } } },
-                    media_count: { type: 'integer' },
-                    media: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          id: { type: 'string', format: 'uuid' },
-                          post_id: { type: 'string', format: 'uuid' },
-                          family_id: { type: 'string', format: 'uuid' },
-                          uploader_id: { type: 'string' },
-                          type: { type: 'string' },
-                          url: { type: 'string' },
-                          thumbnail_url: { oneOf: [{ type: 'string' }, { type: 'null' }] },
-                          created_at: { type: 'string', format: 'date-time' },
-                        },
-                      },
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    image: { type: ['string', 'null'] },
+                  },
+                },
+                media: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: true,
+                    properties: {
+                      id: { type: 'string', format: 'uuid' },
+                      post_id: { type: 'string', format: 'uuid' },
+                      family_id: { type: 'string', format: 'uuid' },
+                      uploader_id: { type: 'string' },
+                      type: { type: 'string' },
+                      url: { type: 'string' },
+                      thumbnail_url: { type: ['string', 'null'] },
+                      created_at: { type: 'string', format: 'date-time' },
                     },
                   },
                 },
               },
-              total: { type: 'integer' },
             },
           },
           401: { type: 'object', properties: { error: { type: 'string' } } },
@@ -160,10 +164,7 @@ export function registerPostsRoutes(app: App) {
       const firstPostMedia = postIds.length > 0 ? (mediaByPostId.get(postIds[0]) ?? []) : [];
       app.logger.info({ firstPostMedia }, '[Posts] post[0] media');
 
-      return {
-        posts: postsWithDetails,
-        total: totalResult.length,
-      };
+      return postsWithDetails;
     }
   );
 

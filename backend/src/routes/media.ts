@@ -373,9 +373,10 @@ export function registerMediaRoutes(app: App) {
           return reply.status(400).send({ error: 'Failed to read file' });
         }
 
-        // Generate storage key
+        // Generate storage key with sanitized filename
         const uniqueId = Math.random().toString(36).substring(2, 15);
-        const key = `uploads/${session.user.id}/${uniqueId}_${filename}`;
+        const safeFilename = filename.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._\-]/g, '');
+        const key = `uploads/${session.user.id}/${uniqueId}_${safeFilename}`;
 
         // Upload the file to storage API
         const storageBaseUrl = process.env.STORAGE_API_BASE_URL;

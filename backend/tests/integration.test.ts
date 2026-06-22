@@ -145,15 +145,14 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/posts", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data.posts)).toBe(true);
-    expect(typeof data.total).toBe("number");
+    expect(Array.isArray(data)).toBe(true);
   });
 
   test("List posts with pagination", async () => {
     const res = await authenticatedApi("/api/posts?limit=5&offset=0", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data.posts)).toBe(true);
+    expect(Array.isArray(data)).toBe(true);
   });
 
   test("List posts without auth returns 401", async () => {
