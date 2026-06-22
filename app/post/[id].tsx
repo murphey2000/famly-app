@@ -267,7 +267,6 @@ export default function PostDetailScreen() {
             >
               <ArrowLeft size={20} color={COLORS.text} />
             </AnimatedPressable>
-
             {isAuthor && (
               <AnimatedPressable
                 onPress={handleDelete}
@@ -422,7 +421,6 @@ export default function PostDetailScreen() {
                 >
                   <ArrowLeft size={20} color="#FFFFFF" />
                 </AnimatedPressable>
-
                 {isAuthor && (
                   <AnimatedPressable
                     onPress={handleDelete}
@@ -586,7 +584,7 @@ export default function PostDetailScreen() {
             {photos.length > 1 && (
               <View>
                 <Text style={{ fontSize: 12, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 10 }}>
-                  ALLE FOTOS ({photos.length})
+                  {`ALLE FOTOS (${photos.length})`}
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {photos.map((photo, i) => (
