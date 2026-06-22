@@ -1,6 +1,7 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
+import sharp from 'sharp';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 
@@ -120,6 +121,9 @@ export function registerMediaRoutes(app: App) {
       if (!session) return;
 
       app.logger.info({ userId: session.user.id, filename: request.body.filename }, 'Getting upload URL');
+
+      // NOTE: Server-side enhancement is not possible for direct client-to-storage signed-URL uploads.
+      // Enhancement only applies to server-proxied uploads handled by the /api/upload-file endpoint.
 
       const uniqueId = Math.random().toString(36).substring(2, 15);
       const key = `media/${session.user.id}/${uniqueId}/${request.body.filename}`;
@@ -370,6 +374,23 @@ export function registerMediaRoutes(app: App) {
         } catch (bufferError) {
           app.logger.error({ err: bufferError }, 'Failed to convert file to buffer');
           return reply.status(400).send({ error: 'Failed to read file' });
+        }
+
+        // Apply automatic photo enhancement for images
+        let enhancedMimetype = mimetype;
+        if (mimetype.startsWith('image/')) {
+          try {
+            app.logger.info({ filename, originalSize: buffer.length }, 'Starting photo enhancement');
+            buffer = await sharp(buffer)
+              .normalize()
+              .sharpen({ sigma: 0.5 })
+              .jpeg({ quality: 85 })
+              .toBuffer();
+            enhancedMimetype = 'image/jpeg';
+            app.logger.info({ filename, enhancedSize: buffer.length }, 'Photo enhancement completed');
+          } catch (enhanceError) {
+            app.logger.warn({ err: enhanceError, filename }, 'Photo enhancement failed, using original');
+          }
         }
 
         // Generate storage key with sanitized filename
