@@ -165,6 +165,7 @@ export default function PostDetailScreen() {
     );
   };
 
+  console.log("[PostDetail] isAuthor check:", post?.author?.id, user?.id);
   const isAuthor = post?.author?.id === user?.id;
   const photos = post?.media.filter((m) => m.type === "photo") || [];
   const isProcessing = post?.ai_status === "processing" || post?.ai_status === "pending";
@@ -238,15 +239,65 @@ export default function PostDetailScreen() {
     .toUpperCase()
     .slice(0, 2);
 
+  const hasPhotos = photos.length > 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
+        {/* Non-absolute header when no photo */}
+        {!hasPhotos && (
+          <View
+            style={{
+              paddingTop: insets.top + 12,
+              paddingHorizontal: 20,
+              paddingBottom: 12,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: COLORS.background,
+            }}
+          >
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[PostDetail] Back button pressed");
+                router.back();
+              }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: COLORS.surfaceSecondary,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <ArrowLeft size={20} color={COLORS.text} />
+            </AnimatedPressable>
+
+            {isAuthor && (
+              <AnimatedPressable
+                onPress={handleDelete}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: COLORS.dangerMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Trash2 size={18} color={COLORS.danger} />
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
         <ScrollView
           contentContainerStyle={{ paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero Photo */}
-          {photos.length > 0 && (
+          {/* Hero Photo with absolute header overlay */}
+          {hasPhotos && (
             <View style={{ position: "relative" }}>
               <Image
                 source={{ uri: photos[selectedPhotoIndex]?.url }}
@@ -264,54 +315,53 @@ export default function PostDetailScreen() {
                   backgroundColor: "rgba(0,0,0,0.15)",
                 }}
               />
-            </View>
-          )}
-
-          {/* Back + Delete Header */}
-          <View
-            style={{
-              position: "absolute",
-              top: insets.top + 12,
-              left: 20,
-              right: 20,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <AnimatedPressable
-              onPress={() => {
-                console.log("[PostDetail] Back button pressed");
-                router.back();
-              }}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: photos.length > 0 ? "rgba(0,0,0,0.4)" : COLORS.surfaceSecondary,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <ArrowLeft size={20} color={photos.length > 0 ? "#FFFFFF" : COLORS.text} />
-            </AnimatedPressable>
-
-            {isAuthor && (
-              <AnimatedPressable
-                onPress={handleDelete}
+              {/* Absolute header over photo */}
+              <View
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: photos.length > 0 ? "rgba(0,0,0,0.4)" : COLORS.dangerMuted,
+                  position: "absolute",
+                  top: insets.top + 12,
+                  left: 20,
+                  right: 20,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
                   alignItems: "center",
-                  justifyContent: "center",
                 }}
               >
-                <Trash2 size={18} color={photos.length > 0 ? "#FFFFFF" : COLORS.danger} />
-              </AnimatedPressable>
-            )}
-          </View>
+                <AnimatedPressable
+                  onPress={() => {
+                    console.log("[PostDetail] Back button pressed");
+                    router.back();
+                  }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: "rgba(0,0,0,0.4)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ArrowLeft size={20} color="#FFFFFF" />
+                </AnimatedPressable>
+
+                {isAuthor && (
+                  <AnimatedPressable
+                    onPress={handleDelete}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: "rgba(0,0,0,0.4)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Trash2 size={18} color="#FFFFFF" />
+                  </AnimatedPressable>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Content */}
           <View style={{ padding: 20, gap: 16 }}>
