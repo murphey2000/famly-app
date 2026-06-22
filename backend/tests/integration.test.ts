@@ -114,6 +114,32 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Create a post with empty tags array", async () => {
+    const res = await authenticatedApi("/api/posts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Post with no tags", tags: [] }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+  });
+
+  test("Create a post with event_date", async () => {
+    const res = await authenticatedApi("/api/posts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        raw_text: "Post with event date",
+        event_date: "2025-06-22T10:30:00Z",
+        tags: ["event"],
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+  });
+
   // Posts - Read (list)
   test("List posts", async () => {
     const res = await authenticatedApi("/api/posts", authToken);
@@ -176,6 +202,35 @@ describe("API Integration Tests", () => {
     expect(data.id).toBeDefined();
     expect(data.post_id).toBe(postId);
     expect(data.type).toBe("photo");
+  });
+
+  test("Add video media to a post", async () => {
+    const res = await authenticatedApi(`/api/posts/${postId}/media`, authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "video",
+        url: "https://example.com/video.mp4",
+        thumbnail_url: "https://example.com/video-thumb.jpg",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.type).toBe("video");
+  });
+
+  test("Add audio media to a post", async () => {
+    const res = await authenticatedApi(`/api/posts/${postId}/media`, authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "audio",
+        url: "https://example.com/audio.mp3",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.type).toBe("audio");
   });
 
   test("Add media with missing type returns 400", async () => {
@@ -272,6 +327,21 @@ describe("API Integration Tests", () => {
     expect(data.public_url).toBeDefined();
   });
 
+  test("Get upload URL for video file", async () => {
+    const res = await authenticatedApi("/api/upload-url", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: "test-video.mp4",
+        content_type: "video/mp4",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.upload_url).toBeDefined();
+    expect(data.public_url).toBeDefined();
+  });
+
   test("Get upload URL with missing filename returns 400", async () => {
     const res = await authenticatedApi("/api/upload-url", authToken, {
       method: "POST",
@@ -318,6 +388,18 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.public_url).toBeDefined();
     expect(data.key).toBeDefined();
+  });
+
+  test("Upload video file to S3 storage", async () => {
+    const form = new FormData();
+    form.append("file", createTestFile("test-upload.mp4", "video file content", "video/mp4"));
+    const res = await authenticatedApi("/api/upload-file", authToken, {
+      method: "POST",
+      body: form,
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.public_url).toBeDefined();
   });
 
   test("Upload file without auth returns 401", async () => {
@@ -684,6 +766,33 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.name).toBe("Updated Test Name");
+  });
+
+  test("Partial update user profile (name only)", async () => {
+    const res = await authenticatedApi("/api/profile", authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Partial Update Name",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.name).toBe("Partial Update Name");
+    expect(data.email).toBeDefined();
+  });
+
+  test("Partial update user profile (avatar_url only)", async () => {
+    const res = await authenticatedApi("/api/profile", authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        avatar_url: "https://example.com/new-avatar.jpg",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.image).toBeDefined();
   });
 
   test("Get profile without auth returns 401", async () => {

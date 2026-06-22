@@ -411,91 +411,100 @@ export function registerPostsRoutes(app: App) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
 
-      // Load related media
+      // Load related media from database
       const mediaRows = await app.db
         .select()
         .from(schema.media)
         .where(eq(schema.media.post_id, post[0].id));
 
-      let aiTitle = 'Mein Moment';
-      let aiStory = post[0].raw_text || '';
+      app.logger.info({ postId: request.params.id, mediaCount: mediaRows.length }, 'Loaded media from database');
 
-      if (process.env.OPENROUTER_API_KEY) {
-        try {
-          const systemPrompt = `Du bist ein Familienchronist. Verbessere den folgenden Text sprachlich — mach ihn lebendiger, wärmer und persönlicher. Füge KEINE neuen Fakten, Ereignisse oder Personen hinzu, die nicht im Original stehen. Behalte den Inhalt exakt bei. Maximal 60 Wörter. Antworte NUR mit einem JSON-Objekt: {"title": "...", "story": "..."}`;
-
-          const userPrompt = post[0].raw_text || '';
-
-          // Find first image media if available
-          const imageMedia = mediaRows.find((m) => m.type === 'image');
-
-          // Build message content - can include image
-          const messageContent: any[] = [];
-          if (imageMedia && imageMedia.url) {
-            messageContent.push({
-              type: 'image_url',
-              image_url: {
-                url: imageMedia.url,
-              },
-            });
-          }
-          messageContent.push({
-            type: 'text',
-            text: userPrompt,
-          });
-
-          app.logger.info({ postId: request.params.id, hasImage: !!imageMedia }, 'Calling AI with vision');
-
-          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.0-flash-001',
-              messages: [
-                {
-                  role: 'system',
-                  content: systemPrompt,
-                },
-                {
-                  role: 'user',
-                  content: messageContent,
-                },
-              ],
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`OpenRouter API error: ${response.status}`);
-          }
-
-          const data = await response.json() as { choices: Array<{ message: { content: string } }> };
-          const content = data.choices[0].message.content;
-          app.logger.info({ postId: request.params.id, rawContent: content.slice(0, 500) }, 'Raw AI response');
-          // Strip markdown code fences if present
-          const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-          const parsed = JSON.parse(cleaned);
-
-          // Enforce length limits
-          aiTitle = (parsed.title || 'Mein Moment').substring(0, 40);
-          const storyRaw = parsed.story || post[0].raw_text || '';
-          const storyWords = storyRaw.trim().split(/\s+/);
-          aiStory = storyWords.slice(0, 60).join(' ');
-
-          app.logger.info({ postId: request.params.id, titleLen: aiTitle.length, storyLen: aiStory.length }, 'Preview generated successfully');
-        } catch (error) {
-          app.logger.error({ err: error, postId: request.params.id }, 'Failed to generate preview, using fallback');
-        }
-      } else {
-        app.logger.warn({ postId: request.params.id }, 'OPENROUTER_API_KEY not set, using fallback preview');
+      if (!process.env.OPENROUTER_API_KEY) {
+        return reply.status(500).send({ error: 'OPENROUTER_API_KEY not configured' });
       }
 
-      return {
-        ai_title: aiTitle,
-        ai_story: aiStory,
-      };
+      try {
+        const systemPrompt = `Du bist ein Familienchronist. Verbessere den folgenden Text sprachlich — mach ihn lebendiger, wärmer und persönlicher. Füge KEINE neuen Fakten, Ereignisse oder Personen hinzu, die nicht im Original stehen. Behalte den Inhalt exakt bei. Maximal 60 Wörter. Antworte NUR mit einem JSON-Objekt: {"title": "...", "story": "..."}`;
+
+        const userText = post[0].raw_text || '';
+        const fullPrompt = `${systemPrompt}\n\nText zum Verbessern:\n${userText}`;
+
+        // Find first image media if available
+        const imageMedia = mediaRows.find((m) => m.type === 'image');
+        if (imageMedia && imageMedia.url) {
+          app.logger.info({ postId: request.params.id, imageUrl: imageMedia.url }, 'Using image from media');
+        }
+
+        // Build message content - can include image
+        const messageContent: any[] = [];
+        if (imageMedia && imageMedia.url) {
+          messageContent.push({
+            type: 'image_url',
+            image_url: {
+              url: imageMedia.url,
+            },
+          });
+        }
+        messageContent.push({
+          type: 'text',
+          text: fullPrompt,
+        });
+
+        app.logger.info({ postId: request.params.id, hasImage: !!imageMedia }, 'Calling AI with vision');
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.0-flash',
+            messages: [
+              {
+                role: 'user',
+                content: messageContent,
+              },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          app.logger.error({ status: response.status, error: errorText }, 'OpenRouter API error');
+          return reply.status(500).send({ error: `OpenRouter API error: ${response.status}` });
+        }
+
+        const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+        const content = data.choices[0].message.content;
+        app.logger.info({ postId: request.params.id, rawContent: content.slice(0, 500) }, 'Raw AI response');
+
+        // Strip markdown code fences if present
+        const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch (parseError) {
+          app.logger.error({ rawContent: content }, 'JSON parse failed');
+          return reply.status(500).send({ error: `Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}` });
+        }
+
+        // Enforce length limits
+        const aiTitle = (parsed.title || 'Mein Moment').substring(0, 40);
+        const storyRaw = parsed.story || post[0].raw_text || '';
+        const storyWords = storyRaw.trim().split(/\s+/);
+        const aiStory = storyWords.slice(0, 60).join(' ');
+
+        app.logger.info({ postId: request.params.id, titleLen: aiTitle.length, storyLen: aiStory.length }, 'Preview generated successfully');
+
+        return {
+          ai_title: aiTitle,
+          ai_story: aiStory,
+        };
+      } catch (error) {
+        app.logger.error({ err: error, postId: request.params.id }, 'Unexpected error during preview generation');
+        return reply.status(500).send({ error: `Preview generation failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      }
     }
   );
 
