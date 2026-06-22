@@ -4,7 +4,6 @@ import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
 import sharp from 'sharp';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
-import { generatePublicUrl } from '../lib/storage-utils.js';
 
 export function registerMediaRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -29,6 +28,8 @@ export function registerMediaRoutes(app: App) {
             type: { type: 'string', enum: ['photo', 'video', 'audio'] },
             url: { type: 'string' },
             thumbnail_url: { type: 'string' },
+            storage_key: { type: 'string' },
+            thumbnail_key: { type: 'string' },
           },
         },
         response: {
@@ -49,7 +50,10 @@ export function registerMediaRoutes(app: App) {
       },
     },
     async (
-      request: FastifyRequest<{ Params: { id: string }; Body: { type: string; url: string; thumbnail_url?: string } }>,
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: { type: string; url: string; thumbnail_url?: string; storage_key?: string; thumbnail_key?: string };
+      }>,
       reply: FastifyReply
     ) => {
       const session = await requireAuth(request, reply);
@@ -76,6 +80,8 @@ export function registerMediaRoutes(app: App) {
           type: request.body.type,
           url: request.body.url,
           thumbnail_url: request.body.thumbnail_url || null,
+          storage_key: request.body.storage_key || null,
+          thumbnail_key: request.body.thumbnail_key || null,
         })
         .returning();
 
@@ -85,59 +91,6 @@ export function registerMediaRoutes(app: App) {
 
       reply.status(201);
       return createdMedia;
-    }
-  );
-
-  app.fastify.post(
-    '/api/upload-url',
-    {
-      schema: {
-        description: 'Get signed upload URL for media',
-        tags: ['media'],
-        body: {
-          type: 'object',
-          required: ['filename', 'content_type'],
-          properties: {
-            filename: { type: 'string' },
-            content_type: { type: 'string' },
-          },
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              upload_url: { type: 'string' },
-              public_url: { type: 'string' },
-            },
-          },
-          401: { type: 'object', properties: { error: { type: 'string' } } },
-        },
-      },
-    },
-    async (
-      request: FastifyRequest<{ Body: { filename: string; content_type: string } }>,
-      reply: FastifyReply
-    ) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
-
-      app.logger.info({ userId: session.user.id, filename: request.body.filename }, 'Getting upload URL');
-
-      // NOTE: Server-side enhancement is not possible for direct client-to-storage signed-URL uploads.
-      // Enhancement only applies to server-proxied uploads handled by the /api/upload-file endpoint.
-
-      const uniqueId = Math.random().toString(36).substring(2, 15);
-      const key = `media/${session.user.id}/${uniqueId}/${request.body.filename}`;
-
-      const uploadUrl = `${process.env.STORAGE_API_BASE_URL}/upload?key=${encodeURIComponent(key)}&content_type=${encodeURIComponent(request.body.content_type)}`;
-      const publicUrl = `${process.env.STORAGE_API_BASE_URL}/public/${key}`;
-
-      app.logger.info({ key }, 'Upload URL generated');
-
-      return {
-        upload_url: uploadUrl,
-        public_url: publicUrl,
-      };
     }
   );
 
@@ -326,6 +279,7 @@ export function registerMediaRoutes(app: App) {
           200: {
             type: 'object',
             properties: {
+              key: { type: 'string' },
               url: { type: 'string' },
               public_url: { type: 'string' },
             },
@@ -372,13 +326,11 @@ export function registerMediaRoutes(app: App) {
           return reply.status(400).send({ error: 'No file provided' });
         }
 
-        const filename = data.filename;
+        // Prefer the multipart part's own filename; fall back to a `filename`
+        // text field (native multipart uploads don't always set the part name).
+        const filename: string =
+          data.filename || (data.fields?.filename?.value as string | undefined) || `upload_${Date.now()}.jpg`;
         const mimetype = data.mimetype || 'application/octet-stream';
-
-        if (!filename) {
-          app.logger.warn('No filename in file data');
-          return reply.status(400).send({ error: 'Missing filename' });
-        }
 
         // Convert file to buffer
         let buffer: Buffer;
@@ -413,23 +365,26 @@ export function registerMediaRoutes(app: App) {
         const fileExtension = safeFilename.split('.').pop() || 'bin';
         const storageKey = `media/${familyId}/${uniqueId}.${fileExtension}`;
 
-        // Upload the file to S3 storage as public
-        app.logger.info({ storageKey, mimetype, bufferSize: buffer.length }, 'Uploading to S3 storage (public)');
+        // Upload the file to storage
+        app.logger.info({ storageKey, mimetype, bufferSize: buffer.length }, 'Uploading to storage');
 
         try {
           const uploadedKey = await app.storage.upload(storageKey, buffer);
-          app.logger.info({ uploadedKey }, 'File uploaded to S3 successfully (public)');
+          app.logger.info({ uploadedKey }, 'File uploaded to storage successfully');
 
-          // Generate permanent public URL
-          const publicUrl = generatePublicUrl(uploadedKey);
-          app.logger.info({ filename, uploadedKey, publicUrl }, 'File upload completed successfully');
+          // Mint a fresh signed URL for immediate display. The durable
+          // reference is `uploadedKey` — clients persist it as storage_key so
+          // the read paths can re-sign on every fetch.
+          const signedUrl = await app.storage.getSignedUrl(uploadedKey);
+          app.logger.info({ filename, uploadedKey }, 'File upload completed successfully');
 
           return {
-            url: publicUrl,
-            public_url: publicUrl,
+            key: uploadedKey,
+            url: signedUrl,
+            public_url: signedUrl,
           };
         } catch (uploadError) {
-          app.logger.error({ err: uploadError, storageKey }, 'S3 storage upload failed');
+          app.logger.error({ err: uploadError, storageKey }, 'Storage upload failed');
           return reply.status(500).send({ error: 'File upload failed' });
         }
       } catch (error) {
