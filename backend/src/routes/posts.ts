@@ -112,10 +112,12 @@ export function registerPostsRoutes(app: App) {
             .from(schema.media)
             .where(eq(schema.media.post_id, p.id));
 
+          app.logger.info({ postId: p.id, author_id: p.author_id }, `author_id being returned: ${p.author_id}`);
+
           return {
             ...p,
             author: {
-              id: author[0].id,
+              id: p.author_id,
               name: author[0].name,
               image: author[0].image,
             },
@@ -267,10 +269,12 @@ export function registerPostsRoutes(app: App) {
         .from(schema.media)
         .where(eq(schema.media.post_id, post[0].id));
 
+      app.logger.info({ postId: post[0].id, author_id: post[0].author_id }, `author_id being returned: ${post[0].author_id}`);
+
       return {
         ...post[0],
         author: {
-          id: author[0].id,
+          id: post[0].author_id,
           name: author[0].name,
           image: author[0].image,
         },
