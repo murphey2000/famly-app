@@ -13,11 +13,13 @@ import { Clock, Plus } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { usePosts } from "@/hooks/usePosts";
+import { useFamily } from "@/hooks/useFamily";
+import { AuthorAvatar } from "@/components/AuthorAvatar";
 import { useTodayMemory } from "@/hooks/useTodayMemory";
 import { formatRelativeDate, getYear, getMonthName } from "@/utils/dateUtils";
 import { SkeletonLine } from "@/components/SkeletonLine";
 import { InspirationChips } from "@/components/InspirationChips";
-import type { Post, TodayMemory } from "@/types";
+import type { Post, TodayMemory, FamilyMember } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -199,12 +201,81 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
   );
 }
 
+function MemberFilterChips({
+  members,
+  selectedAuthorId,
+  onSelect,
+}: {
+  members: FamilyMember[];
+  selectedAuthorId: string | undefined;
+  onSelect: (id: string | undefined) => void;
+}) {
+  const allSelected = selectedAuthorId === undefined;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 4 }}
+      style={{ marginBottom: 16 }}
+    >
+      <AnimatedPressable
+        onPress={() => {
+          console.log("[Memories] Author filter chip pressed: Alle");
+          onSelect(undefined);
+        }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
+          borderRadius: 20,
+          backgroundColor: allSelected ? COLORS.primary : COLORS.surfaceSecondary,
+        }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: "600", color: allSelected ? "#fff" : COLORS.textSecondary }}>
+          Alle
+        </Text>
+      </AnimatedPressable>
+      {members.map((member) => {
+        const isSelected = selectedAuthorId === member.id;
+        const firstName = (member.name ?? "").split(" ")[0] || "?";
+        return (
+          <AnimatedPressable
+            key={member.id}
+            onPress={() => {
+              console.log("[Memories] Author filter chip pressed:", member.id, member.name);
+              onSelect(member.id);
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 20,
+              backgroundColor: isSelected ? COLORS.primary : COLORS.surfaceSecondary,
+            }}
+          >
+            <AuthorAvatar author={member} size={28} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: isSelected ? "#fff" : COLORS.textSecondary }}>
+              {firstName}
+            </Text>
+          </AnimatedPressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export default function MemoriesScreen() {
   const insets = useSafeAreaInsets();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
 
-  const postsQuery = usePosts();
+  const postsQuery = usePosts(selectedAuthorId);
+  const { data: family } = useFamily();
   const todayMemoryQuery = useTodayMemory();
 
   const allPosts = postsQuery.data ?? [];
@@ -300,6 +371,15 @@ export default function MemoriesScreen() {
               </ScrollView>
             </View>
           ) : null
+        )}
+
+        {/* Author filter chips */}
+        {!hasNoPosts && family && family.members && family.members.length > 0 && (
+          <MemberFilterChips
+            members={family.members}
+            selectedAuthorId={selectedAuthorId}
+            onSelect={setSelectedAuthorId}
+          />
         )}
 
         {/* Year Selector */}

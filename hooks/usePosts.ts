@@ -7,10 +7,11 @@ function normalizePosts(data: { posts: Post[] } | Post[]): Post[] {
   return rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "", media: p.media ?? [] }));
 }
 
-export function usePosts() {
+export function usePosts(authorId?: string) {
+  const url = authorId ? `/api/posts?author_id=${authorId}` : "/api/posts";
   return useQuery({
-    queryKey: ["posts"],
-    queryFn: async () => normalizePosts(await apiGet<{ posts: Post[] } | Post[]>("/api/posts")),
+    queryKey: ["posts", authorId ?? "all"],
+    queryFn: async () => normalizePosts(await apiGet<{ posts: Post[] } | Post[]>(url)),
     staleTime: 2 * 60 * 1000,
   });
 }

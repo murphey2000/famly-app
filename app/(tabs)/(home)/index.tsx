@@ -453,14 +453,82 @@ function EmptyState() {
   );
 }
 
+function MemberFilterChips({
+  members,
+  selectedAuthorId,
+  onSelect,
+}: {
+  members: FamilyMember[];
+  selectedAuthorId: string | undefined;
+  onSelect: (id: string | undefined) => void;
+}) {
+  const allSelected = selectedAuthorId === undefined;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 4 }}
+      style={{ marginBottom: 12 }}
+    >
+      <AnimatedPressable
+        onPress={() => {
+          console.log("[Feed] Author filter chip pressed: Alle");
+          onSelect(undefined);
+        }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
+          borderRadius: 20,
+          backgroundColor: allSelected ? COLORS.primary : COLORS.surfaceSecondary,
+        }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: "600", color: allSelected ? "#fff" : COLORS.textSecondary }}>
+          Alle
+        </Text>
+      </AnimatedPressable>
+      {members.map((member) => {
+        const isSelected = selectedAuthorId === member.id;
+        const firstName = (member.name ?? "").split(" ")[0] || "?";
+        return (
+          <AnimatedPressable
+            key={member.id}
+            onPress={() => {
+              console.log("[Feed] Author filter chip pressed:", member.id, member.name);
+              onSelect(member.id);
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 20,
+              backgroundColor: isSelected ? COLORS.primary : COLORS.surfaceSecondary,
+            }}
+          >
+            <AuthorAvatar author={member} size={28} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: isSelected ? "#fff" : COLORS.textSecondary }}>
+              {firstName}
+            </Text>
+          </AnimatedPressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export default function FeedScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [stats, setStats] = useState<FamilyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
 
-  const postsQuery = usePosts();
+  const postsQuery = usePosts(selectedAuthorId);
   const familyQuery = useFamily();
   const todayMemoryQuery = useTodayMemory();
 
@@ -533,6 +601,15 @@ export default function FeedScreen() {
 
       {/* Stats row — only when posts exist */}
       {posts.length > 0 && stats && <StatsRow stats={stats} />}
+
+      {/* Author filter chips */}
+      {family && family.members && family.members.length > 0 && (
+        <MemberFilterChips
+          members={family.members}
+          selectedAuthorId={selectedAuthorId}
+          onSelect={setSelectedAuthorId}
+        />
+      )}
     </View>
   );
 
