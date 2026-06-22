@@ -381,7 +381,11 @@ export default function MemoriesScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginBottom: 12 }}>
                 <Clock size={18} color={COLORS.primary} />
                 <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.text }}>
-                  Heute vor X Jahren
+                  {(() => {
+                    const yearsAgo = new Date().getFullYear() - todayMemories[0].year;
+                    const yearsLabel = yearsAgo === 1 ? "Jahr" : "Jahren";
+                    return "Heute vor " + yearsAgo + " " + yearsLabel;
+                  })()}
                 </Text>
               </View>
               <ScrollView
