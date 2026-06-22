@@ -236,7 +236,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
               }}
               numberOfLines={2}
             >
-              {post.ai_title || post.text.slice(0, 60)}
+              {post.ai_title || (post.text ?? '').slice(0, 60)}
             </Text>
             {post.ai_story ? (
               <Text
@@ -370,7 +370,7 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
           {yearsLabel}
         </Text>
         <Text style={{ fontSize: 15, color: "#FFFFFF", fontWeight: "700" }} numberOfLines={1}>
-          {memory.post.ai_title || memory.post.text.slice(0, 50)}
+          {memory.post.ai_title || (memory.post.text ?? '').slice(0, 50)}
         </Text>
       </View>
       {photo && (
@@ -576,9 +576,18 @@ export default function FeedScreen() {
   const [stats, setStats] = useState<FamilyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
+  const [timedOut, setTimedOut] = useState(false);
 
   const feedQuery = useFeed(selectedAuthorId);
   const familyQuery = useFamily();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log("[Feed] Loading timeout reached, forcing content render");
+      setTimedOut(true);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const feedItems = feedQuery.data ?? [];
   const family = familyQuery.data ?? null;
@@ -593,7 +602,7 @@ export default function FeedScreen() {
 
   const birthdayItems = feedItems.filter((item): item is FeedItemBirthday => item.kind === "birthday");
 
-  const loading = feedQuery.isLoading || familyQuery.isLoading;
+  const loading = ((feedQuery.isPending && !feedQuery.data) || (familyQuery.isPending && !familyQuery.data)) && !timedOut;
   const error = feedQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
 
   useEffect(() => {
