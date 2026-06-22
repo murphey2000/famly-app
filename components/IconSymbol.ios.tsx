@@ -1,5 +1,5 @@
 import { SymbolView, SymbolViewProps, SymbolWeight } from "expo-symbols";
-import { StyleProp, ViewStyle } from "react-native";
+import { Pressable, StyleProp, ViewStyle } from "react-native";
 
 export function IconSymbol({
   ios_icon_name,
@@ -28,12 +28,8 @@ export function IconSymbol({
   testID?: any;
   accessibilityLabel?: any;
 }) {
-  return (
+  const symbol = (
     <SymbolView
-      onPress={onPress}
-      onClick={onClick}
-      onMouseOver={onMouseOver}
-      onMouseLeave={onMouseLeave}
       testID={testID}
       accessibilityLabel={accessibilityLabel}
       weight={weight}
@@ -49,4 +45,16 @@ export function IconSymbol({
       ]}
     />
   );
+
+  // SymbolView doesn't support press/mouse handlers, so wrap it in a
+  // Pressable when a caller actually needs touch handling.
+  if (onPress || onClick) {
+    return (
+      <Pressable onPress={onPress ?? onClick} onHoverIn={onMouseOver} onHoverOut={onMouseLeave}>
+        {symbol}
+      </Pressable>
+    );
+  }
+
+  return symbol;
 }

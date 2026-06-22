@@ -1,12 +1,9 @@
 import React from "react";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
-import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { COLORS } from "@/constants/Colors";
 
 export default function TabLayoutIOS() {
-  const router = useRouter();
-
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="(home)">
@@ -19,13 +16,8 @@ export default function TabLayoutIOS() {
         <Label>Erinnerungen</Label>
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger
-        name="add"
-        onPress={() => {
-          console.log("[TabBar iOS] Add tab pressed, navigating to /post/new");
-          router.push("/post/new");
-        }}
-      >
+      {/* Navigation to /post/new is handled by app/(tabs)/add/index.tsx on focus */}
+      <NativeTabs.Trigger name="add">
         <Icon sf="plus.circle.fill" />
         <Label>Hinzufügen</Label>
       </NativeTabs.Trigger>
