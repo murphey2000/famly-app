@@ -167,7 +167,11 @@ export default function NewPostScreen() {
       }
 
       const result = await uploadResponse.json();
-      publicUrl = result.public_url;
+      console.log("[NewPost] Web upload result:", JSON.stringify(result));
+      publicUrl = result.public_url ?? result.url;
+      if (!publicUrl) {
+        throw new Error("Upload response missing URL: " + JSON.stringify(result));
+      }
     } else {
       // On native, use signed URL + FileSystem.uploadAsync
       console.log("[NewPost] Native: uploading via signed URL");
@@ -175,6 +179,7 @@ export default function NewPostScreen() {
         "/api/upload-url",
         { filename: fileName, content_type: contentType }
       );
+      console.log("[NewPost] Native upload-url response — upload_url:", upload_url, "public_url:", public_url);
 
       const uploadResult = await FileSystem.uploadAsync(upload_url, image.uri, {
         httpMethod: "PUT",
@@ -187,7 +192,7 @@ export default function NewPostScreen() {
       publicUrl = public_url;
     }
 
-    console.log("[NewPost] Image uploaded, registering media for post:", postId);
+    console.log("[NewPost] Registering media — postId:", postId, "url:", publicUrl, "type: photo");
     await apiPost(`/api/posts/${postId}/media`, {
       url: publicUrl,
       type: "photo",
@@ -703,16 +708,16 @@ export default function NewPostScreen() {
               }}
             />
 
-            {/* Character counter */}
+            {/* Word counter */}
             <Text
               style={{
                 fontSize: 12,
-                color: editedStory.length > 160 ? COLORS.danger : COLORS.textTertiary,
+                color: editedStory.trim().split(/\s+/).filter(Boolean).length > 60 ? COLORS.danger : COLORS.textTertiary,
                 textAlign: "right",
                 marginBottom: 12,
               }}
             >
-              {editedStory.length}/160
+              {editedStory.trim() === "" ? 0 : editedStory.trim().split(/\s+/).filter(Boolean).length}/60 Wörter
             </Text>
 
             {/* Hint */}
@@ -724,7 +729,7 @@ export default function NewPostScreen() {
                 fontStyle: "italic",
               }}
             >
-              Max. 160 Zeichen — kurz und persönlich
+              Max. 60 Wörter — kurz und persönlich
             </Text>
           </ScrollView>
         </KeyboardAvoidingView>
