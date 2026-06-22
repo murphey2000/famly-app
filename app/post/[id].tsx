@@ -36,6 +36,7 @@ interface Post {
     id: string;
     url: string;
     type: string;
+    thumbnail_url: string | null;
     filename?: string;
   }>;
 }
@@ -161,7 +162,7 @@ export default function PostDetailScreen() {
 
   console.log("[PostDetail] isAuthor check:", post?.author?.id, user?.id);
   const isAuthor = post?.author?.id === user?.id;
-  const photos = post?.media.filter((m) => m.type === "photo") || [];
+  const photos = (post?.media ?? []).filter((m) => m.type === "photo");
   const isProcessing = post?.ai_status === "processing" || post?.ai_status === "pending";
 
   if (loading) {

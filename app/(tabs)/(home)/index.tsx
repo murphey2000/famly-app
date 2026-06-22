@@ -41,6 +41,7 @@ interface Post {
     id: string;
     url: string;
     type: string;
+    thumbnail_url: string | null;
   }>;
 }
 
