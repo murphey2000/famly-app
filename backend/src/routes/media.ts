@@ -321,9 +321,8 @@ export function registerMediaRoutes(app: App) {
           200: {
             type: 'object',
             properties: {
-              public_url: { type: 'string' },
               url: { type: 'string' },
-              key: { type: 'string' },
+              public_url: { type: 'string' },
             },
           },
           400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -374,50 +373,29 @@ export function registerMediaRoutes(app: App) {
         }
 
         // Generate storage key with sanitized filename
-        const uniqueId = Math.random().toString(36).substring(2, 15);
+        const uniqueId = crypto.randomUUID();
         const safeFilename = filename.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._\-]/g, '');
         const key = `uploads/${session.user.id}/${uniqueId}_${safeFilename}`;
 
-        // Upload the file to storage API
-        const storageBaseUrl = process.env.STORAGE_API_BASE_URL;
-        if (!storageBaseUrl) {
-          app.logger.warn({ filename, key }, 'STORAGE_API_BASE_URL not configured, using mock URL');
-        } else {
-          try {
-            const uploadUrl = `${storageBaseUrl}/upload?key=${encodeURIComponent(key)}&content_type=${encodeURIComponent(mimetype)}`;
+        // Upload the file to S3 storage
+        app.logger.info({ key, mimetype, bufferSize: buffer.length }, 'Uploading to S3 storage');
 
-            app.logger.info({ key, mimetype, bufferSize: buffer.length }, 'Uploading to storage API');
+        try {
+          const uploadedKey = await app.storage.upload(key, buffer);
+          app.logger.info({ uploadedKey }, 'File uploaded to S3 successfully');
 
-            const uploadResponse = await fetch(uploadUrl, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/octet-stream' },
-              body: buffer,
-            });
+          // Generate a signed URL for client access
+          const { url } = await app.storage.getSignedUrl(uploadedKey);
+          app.logger.info({ filename, uploadedKey, url }, 'File upload completed successfully');
 
-            if (!uploadResponse.ok) {
-              const errorText = await uploadResponse.text();
-              app.logger.error({ status: uploadResponse.status, key, mimetype, error: errorText }, 'Storage API upload failed');
-              return reply.status(uploadResponse.status).send({ error: `Storage upload failed: ${errorText || uploadResponse.statusText}` });
-            }
-
-            app.logger.info({ key }, 'File uploaded to storage successfully');
-          } catch (uploadError) {
-            app.logger.error({ err: uploadError, key }, 'Storage API request failed');
-            return reply.status(500).send({ error: 'Storage API request failed' });
-          }
+          return {
+            url,
+            public_url: url,
+          };
+        } catch (uploadError) {
+          app.logger.error({ err: uploadError, key }, 'S3 storage upload failed');
+          return reply.status(500).send({ error: 'File upload failed' });
         }
-
-        // Generate signed GET URL
-        const baseUrl = storageBaseUrl || 'https://storage.example.com';
-        const publicUrl = `${baseUrl}/public/${key}`;
-
-        app.logger.info({ filename, key, publicUrl }, 'File upload completed successfully');
-
-        return {
-          public_url: publicUrl,
-          url: publicUrl,
-          key,
-        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         app.logger.error({ err: error, message }, 'Unexpected error in file upload');

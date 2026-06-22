@@ -386,7 +386,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.public_url).toBeDefined();
-    expect(data.key).toBeDefined();
+    expect(data.url).toBeDefined();
   });
 
   test("Upload video file to S3 storage", async () => {
@@ -399,6 +399,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.public_url).toBeDefined();
+    expect(data.url).toBeDefined();
   });
 
   test("Upload file without auth returns 401", async () => {

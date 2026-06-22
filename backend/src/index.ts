@@ -13,6 +13,7 @@ export const app = await createApplication(schema);
 export type App = typeof app;
 
 app.withAuth();
+app.withStorage();
 
 registerFamiliesRoutes(app);
 registerPostsRoutes(app);
