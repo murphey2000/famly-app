@@ -5,6 +5,42 @@ import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 import { resolveMediaUrl } from '../lib/storage-utils.js';
 
+const ALL_EMOJIS = ['👍', '❤️', '😂'] as const;
+
+async function getReactionsByPostId(
+  app: App,
+  postIds: string[],
+  userId: string
+): Promise<Map<string, { emoji: string; count: number; userReacted: boolean }[]>> {
+  const result = new Map<string, { emoji: string; count: number; userReacted: boolean }[]>();
+  if (postIds.length === 0) return result;
+
+  const rows = await app.db
+    .select()
+    .from(schema.post_reactions)
+    .where(inArray(schema.post_reactions.post_id, postIds));
+
+  const byPost = new Map<string, typeof rows>();
+  for (const r of rows) {
+    if (!byPost.has(r.post_id)) byPost.set(r.post_id, []);
+    byPost.get(r.post_id)!.push(r);
+  }
+
+  for (const postId of postIds) {
+    const postRows = byPost.get(postId) || [];
+    result.set(
+      postId,
+      ALL_EMOJIS.map((emoji) => ({
+        emoji,
+        count: postRows.filter((r) => r.emoji === emoji).length,
+        userReacted: postRows.some((r) => r.emoji === emoji && r.user_id === userId),
+      }))
+    );
+  }
+
+  return result;
+}
+
 export function registerPostsRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
@@ -64,6 +100,17 @@ export function registerPostsRoutes(app: App) {
                       url: { type: 'string' },
                       thumbnail_url: { type: ['string', 'null'] },
                       created_at: { type: 'string', format: 'date-time' },
+                    },
+                  },
+                },
+                reactions: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      emoji: { type: 'string' },
+                      count: { type: 'integer' },
+                      userReacted: { type: 'boolean' },
                     },
                   },
                 },
@@ -149,6 +196,8 @@ export function registerPostsRoutes(app: App) {
         mediaByPostId.get(m.post_id)!.push(m);
       }
 
+      const reactionsByPostId = await getReactionsByPostId(app, postIds, session.user.id);
+
       const postsWithDetails = await Promise.all(
         postsData.map(async (p) => {
           const author = authorMap.get(p.author_id);
@@ -176,6 +225,7 @@ export function registerPostsRoutes(app: App) {
                 created_at: m.created_at,
               }))
             ),
+            reactions: reactionsByPostId.get(p.id) || ALL_EMOJIS.map((emoji) => ({ emoji, count: 0, userReacted: false })),
           };
         })
       );
@@ -775,6 +825,150 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
       }
 
       return publishedPost;
+    }
+  );
+
+  const reactionResponseSchema = {
+    200: {
+      type: 'object',
+      properties: {
+        reactions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              emoji: { type: 'string' },
+              count: { type: 'integer' },
+              userReacted: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
+    401: { type: 'object', properties: { error: { type: 'string' } } },
+    403: { type: 'object', properties: { error: { type: 'string' } } },
+    404: { type: 'object', properties: { error: { type: 'string' } } },
+  } as const;
+
+  async function checkFamilyAccessToPost(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply, session: { user: { id: string } }) {
+    const post = await app.db
+      .select()
+      .from(schema.posts)
+      .where(eq(schema.posts.id, request.params.id))
+      .limit(1);
+
+    if (!post.length) {
+      reply.status(404).send({ error: 'Post not found' });
+      return null;
+    }
+
+    const familyMember = await app.db
+      .select()
+      .from(schema.family_members)
+      .where(
+        and(
+          eq(schema.family_members.user_id, session.user.id),
+          eq(schema.family_members.family_id, post[0].family_id)
+        )
+      )
+      .limit(1);
+
+    if (!familyMember.length) {
+      reply.status(403).send({ error: 'Forbidden' });
+      return null;
+    }
+
+    return post[0];
+  }
+
+  app.fastify.post(
+    '/api/posts/:id/reactions',
+    {
+      schema: {
+        description: "Set (or replace) the caller's reaction on a post",
+        tags: ['posts'],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', format: 'uuid' } },
+        },
+        body: {
+          type: 'object',
+          required: ['emoji'],
+          properties: { emoji: { type: 'string', enum: ALL_EMOJIS as unknown as string[] } },
+        },
+        response: reactionResponseSchema,
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: { emoji: typeof ALL_EMOJIS[number] } }>,
+      reply: FastifyReply
+    ) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      const post = await checkFamilyAccessToPost(request, reply, session);
+      if (!post) return;
+
+      await app.db
+        .delete(schema.post_reactions)
+        .where(
+          and(
+            eq(schema.post_reactions.post_id, request.params.id),
+            eq(schema.post_reactions.user_id, session.user.id)
+          )
+        );
+
+      await app.db.insert(schema.post_reactions).values({
+        post_id: request.params.id,
+        user_id: session.user.id,
+        emoji: request.body.emoji,
+      });
+
+      app.logger.info(
+        { postId: request.params.id, userId: session.user.id, emoji: request.body.emoji },
+        'Reaction set'
+      );
+
+      const reactionsMap = await getReactionsByPostId(app, [request.params.id], session.user.id);
+      return { reactions: reactionsMap.get(request.params.id) || [] };
+    }
+  );
+
+  app.fastify.delete(
+    '/api/posts/:id/reactions',
+    {
+      schema: {
+        description: "Remove the caller's reaction from a post",
+        tags: ['posts'],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', format: 'uuid' } },
+        },
+        response: reactionResponseSchema,
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      const post = await checkFamilyAccessToPost(request, reply, session);
+      if (!post) return;
+
+      await app.db
+        .delete(schema.post_reactions)
+        .where(
+          and(
+            eq(schema.post_reactions.post_id, request.params.id),
+            eq(schema.post_reactions.user_id, session.user.id)
+          )
+        );
+
+      app.logger.info({ postId: request.params.id, userId: session.user.id }, 'Reaction removed');
+
+      const reactionsMap = await getReactionsByPostId(app, [request.params.id], session.user.id);
+      return { reactions: reactionsMap.get(request.params.id) || [] };
     }
   );
 }

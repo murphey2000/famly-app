@@ -10,19 +10,20 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
-import { Plus, Clock, ChevronRight } from "lucide-react-native";
+import { useQueryClient } from "@tanstack/react-query";
+import { Plus, Clock } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatRelativeDate } from "@/utils/dateUtils";
 import { SkeletonLine } from "@/components/SkeletonLine";
 import { InspirationChips } from "@/components/InspirationChips";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
+import { PostCard } from "@/components/PostCard";
 import { useFeed } from "@/hooks/useFeed";
 import { useFamily } from "@/hooks/useFamily";
-import type { Post, FamilyMember, FamilyStats, TodayMemory, FeedItemPost, FeedItemBirthday } from "@/types";
+import { useInfinitePosts } from "@/hooks/useInfinitePosts";
+import type { FamilyMember, FamilyStats, TodayMemory, FeedItemBirthday } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -573,6 +574,7 @@ export default function FeedScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const [stats, setStats] = useState<FamilyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
@@ -580,6 +582,7 @@ export default function FeedScreen() {
 
   const feedQuery = useFeed(selectedAuthorId);
   const familyQuery = useFamily();
+  const infinitePostsQuery = useInfinitePosts(selectedAuthorId);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -592,8 +595,7 @@ export default function FeedScreen() {
   const feedItems = feedQuery.data ?? [];
   const family = familyQuery.data ?? null;
 
-  const postItems = feedItems.filter((item): item is FeedItemPost => item.kind === "post");
-  const posts = postItems.map((item) => item.post);
+  const posts = infinitePostsQuery.data?.pages.flatMap((page) => page.posts) ?? [];
 
   const firstMemoryItem = feedItems.find((item) => item.kind === "memory");
   const todayMemory: TodayMemory | null = firstMemoryItem && firstMemoryItem.kind === "memory"
@@ -628,15 +630,25 @@ export default function FeedScreen() {
   const handleRefresh = () => {
     console.log("[Feed] Pull to refresh triggered");
     setRefreshing(true);
-    Promise.all([feedQuery.refetch(), familyQuery.refetch()]).finally(() => {
+    queryClient.invalidateQueries({ queryKey: ["posts", "infinite"] });
+    queryClient.invalidateQueries({ queryKey: ["feed"] });
+    Promise.all([infinitePostsQuery.refetch(), feedQuery.refetch(), familyQuery.refetch()]).finally(() => {
       setRefreshing(false);
     });
   };
 
   const handleRetry = () => {
     console.log("[Feed] Retry button pressed");
+    infinitePostsQuery.refetch();
     feedQuery.refetch();
     familyQuery.refetch();
+  };
+
+  const handleLoadMore = () => {
+    if (infinitePostsQuery.hasNextPage && !infinitePostsQuery.isFetchingNextPage) {
+      console.log("[Feed] Loading next page");
+      infinitePostsQuery.fetchNextPage();
+    }
   };
 
   const renderHeader = () => (
@@ -727,6 +739,15 @@ export default function FeedScreen() {
         renderItem={({ item, index }) => <PostCard post={item} index={index} />}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={<EmptyState />}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.8}
+        ListFooterComponent={
+          infinitePostsQuery.isFetchingNextPage ? (
+            <View style={{ paddingVertical: 8 }}>
+              <PostCardSkeleton />
+            </View>
+          ) : null
+        }
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl
