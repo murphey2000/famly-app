@@ -3,7 +3,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, ne, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
-import { refreshMediaUrl } from '../lib/storage-utils.js';
+import { resolveMediaUrl } from '../lib/storage-utils.js';
 
 export function registerPostsRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -149,32 +149,36 @@ export function registerPostsRoutes(app: App) {
         mediaByPostId.get(m.post_id)!.push(m);
       }
 
-      const postsWithDetails = postsData.map((p) => {
-        const author = authorMap.get(p.author_id);
-        const mediaRows = mediaByPostId.get(p.id) || [];
+      const postsWithDetails = await Promise.all(
+        postsData.map(async (p) => {
+          const author = authorMap.get(p.author_id);
+          const mediaRows = mediaByPostId.get(p.id) || [];
 
-        app.logger.info({ postId: p.id, author_id: p.author_id }, `author_id being returned: ${p.author_id}`);
+          app.logger.info({ postId: p.id, author_id: p.author_id }, `author_id being returned: ${p.author_id}`);
 
-        return {
-          ...p,
-          author: {
-            id: p.author_id,
-            name: author?.name || '',
-            image: author?.image || null,
-          },
-          media_count: mediaRows.length,
-          media: mediaRows.map((m) => ({
-            id: m.id,
-            post_id: m.post_id,
-            family_id: m.family_id,
-            uploader_id: m.uploader_id,
-            type: m.type,
-            url: refreshMediaUrl(m.url, m.storage_key),
-            thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
-            created_at: m.created_at,
-          })),
-        };
-      });
+          return {
+            ...p,
+            author: {
+              id: p.author_id,
+              name: author?.name || '',
+              image: author?.image || null,
+            },
+            media_count: mediaRows.length,
+            media: await Promise.all(
+              mediaRows.map(async (m) => ({
+                id: m.id,
+                post_id: m.post_id,
+                family_id: m.family_id,
+                uploader_id: m.uploader_id,
+                type: m.type,
+                url: await resolveMediaUrl(app.storage, m.url, m.storage_key),
+                thumbnail_url: await resolveMediaUrl(app.storage, m.thumbnail_url, m.thumbnail_key),
+                created_at: m.created_at,
+              }))
+            ),
+          };
+        })
+      );
 
       app.logger.info({ count: postsWithDetails.length, total: totalResult.length }, 'Posts retrieved');
 
@@ -344,16 +348,18 @@ export function registerPostsRoutes(app: App) {
           name: author[0].name,
           image: author[0].image,
         },
-        media: mediaRows.map((m) => ({
-          id: m.id,
-          post_id: m.post_id,
-          family_id: m.family_id,
-          uploader_id: m.uploader_id,
-          type: m.type,
-          url: refreshMediaUrl(m.url, m.storage_key),
-          thumbnail_url: refreshMediaUrl(m.thumbnail_url, m.thumbnail_key),
-          created_at: m.created_at,
-        })),
+        media: await Promise.all(
+          mediaRows.map(async (m) => ({
+            id: m.id,
+            post_id: m.post_id,
+            family_id: m.family_id,
+            uploader_id: m.uploader_id,
+            type: m.type,
+            url: await resolveMediaUrl(app.storage, m.url, m.storage_key),
+            thumbnail_url: await resolveMediaUrl(app.storage, m.thumbnail_url, m.thumbnail_key),
+            created_at: m.created_at,
+          }))
+        ),
       };
     }
   );
