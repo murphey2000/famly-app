@@ -1,54 +1,57 @@
-/**
- * Generate a public URL from a storage key.
- * Public URLs are permanent and never expire.
- */
-export function generatePublicUrl(storageKey: string): string {
-  const storageBaseUrl = process.env.STORAGE_API_BASE_URL || '';
-  return `${storageBaseUrl}/public/${storageKey}`;
-}
+import type { App } from '../index.js';
 
 /**
- * Extract storage key from a signed URL (legacy support).
- * Detects signed URL indicators and extracts the key path.
+ * Resolve the storage key for a media row.
+ *
+ * Prefers the explicit `storage_key` column. Falls back to parsing a key out of
+ * a previously-stored URL so legacy rows keep working:
+ *  - rows that stored a host-less `/public/<key>` path
+ *  - rows that stored an old signed URL (key is the path, minus the query)
  */
-export function extractKeyFromSignedUrl(url: string): string | null {
-  // Check for signed URL indicators
-  if (!url.includes('X-Amz-Expires') && !url.includes('X-Goog-Expires') && !url.includes('x-goog-signature')) {
-    return null;
-  }
-
-  try {
-    const urlObj = new URL(url);
-    // Remove query parameters to get the path
-    const pathname = urlObj.pathname;
-    // Remove leading /public/ if present
-    if (pathname.startsWith('/public/')) {
-      return pathname.substring(8); // '/public/'.length = 8
-    }
-    return pathname.substring(1); // Remove leading /
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Refresh media URL - returns a fresh public URL.
- * Uses storage_key if available, otherwise tries to extract from stored URL.
- */
-export function refreshMediaUrl(url: string | null | undefined, storageKey: string | null | undefined): string | null {
+export function extractStorageKey(
+  url: string | null | undefined,
+  storageKey: string | null | undefined
+): string | null {
+  if (storageKey) return storageKey;
   if (!url) return null;
 
-  // If we have a storage key, always use it to generate a fresh public URL
-  if (storageKey) {
-    return generatePublicUrl(storageKey);
+  // URL that embeds the key after "/public/"
+  const publicIdx = url.indexOf('/public/');
+  if (publicIdx !== -1) {
+    return decodeURIComponent(url.slice(publicIdx + '/public/'.length).split('?')[0]);
   }
 
-  // Legacy: try to extract key from stored signed URL
-  const extractedKey = extractKeyFromSignedUrl(url);
-  if (extractedKey) {
-    return generatePublicUrl(extractedKey);
+  // Legacy signed URLs (S3/GCS) — the key is the path, sans query string
+  if (url.includes('X-Amz-') || url.includes('X-Goog-') || url.includes('x-goog-signature')) {
+    try {
+      const { pathname } = new URL(url);
+      const path = pathname.startsWith('/') ? pathname.slice(1) : pathname;
+      return decodeURIComponent(path.startsWith('public/') ? path.slice('public/'.length) : path);
+    } catch {
+      return null;
+    }
   }
 
-  // If it's already a public URL (no signed indicators), return as-is
-  return url;
+  return null;
+}
+
+/**
+ * Resolve a stored media reference to a fresh, readable URL.
+ *
+ * Object storage exposes files via short-lived signed URLs, so we mint one per
+ * request from the storage key. If no key can be derived (e.g. an already
+ * absolute URL), the stored URL is returned unchanged.
+ */
+export async function resolveMediaUrl(
+  storage: App['storage'],
+  url: string | null | undefined,
+  storageKey: string | null | undefined
+): Promise<string | null> {
+  const key = extractStorageKey(url, storageKey);
+  if (!key) return url ?? null;
+  try {
+    return await storage.getSignedUrl(key);
+  } catch {
+    return url ?? null;
+  }
 }
