@@ -4,7 +4,7 @@ import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
 import sharp from 'sharp';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
-import { generatePublicUrl } from '../lib/storage-utils.js';
+import { getSignedDownloadUrl } from '../lib/storage-utils.js';
 
 export function registerMediaRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -373,16 +373,16 @@ export function registerMediaRoutes(app: App) {
           const uploadedKey = await app.storage.upload(storageKey, buffer);
           app.logger.info({ uploadedKey }, 'File uploaded to storage successfully');
 
-          // Permanent public URL served by the storage proxy. We also return
-          // the storage `key` so clients can persist it as storage_key and the
-          // read paths can regenerate the URL if the base ever changes.
-          const publicUrl = generatePublicUrl(uploadedKey);
-          app.logger.info({ filename, uploadedKey, publicUrl }, 'File upload completed successfully');
+          // No permanent public URL exists — mint a short-lived presigned URL
+          // for immediate display. The durable reference is `uploadedKey`, which
+          // clients persist as storage_key so the read paths can re-sign later.
+          const signedUrl = await getSignedDownloadUrl(uploadedKey);
+          app.logger.info({ filename, uploadedKey, signed: !!signedUrl }, 'File upload completed successfully');
 
           return {
             key: uploadedKey,
-            url: publicUrl,
-            public_url: publicUrl,
+            url: signedUrl ?? '',
+            public_url: signedUrl ?? '',
           };
         } catch (uploadError) {
           app.logger.error({ err: uploadError, storageKey }, 'Storage upload failed');
