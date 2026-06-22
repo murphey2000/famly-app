@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,93 +12,18 @@ import { Image } from "expo-image";
 import { Clock, Plus } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { apiGet } from "@/utils/api";
+import { usePosts } from "@/hooks/usePosts";
+import { useTodayMemory } from "@/hooks/useTodayMemory";
 import { formatRelativeDate, getYear, getMonthName } from "@/utils/dateUtils";
+import { SkeletonLine } from "@/components/SkeletonLine";
+import { InspirationChips } from "@/components/InspirationChips";
+import type { Post, TodayMemory } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
   if (typeof source === "string") return { uri: source };
   return source as ImageSourcePropType;
-}
-
-interface Post {
-  id: string;
-  text: string;
-  ai_title?: string;
-  ai_story?: string;
-  ai_status: string;
-  tags: string[];
-  created_at: string;
-  author: { id: string; name: string; image?: string };
-  media: Array<{ id: string; url: string; type: string }>;
-}
-
-interface TodayMemory {
-  id: string;
-  year: number;
-  post: Post;
-}
-
-interface TimelineEntry {
-  year: number;
-  month: string;
-  posts: Post[];
-}
-
-const INSPIRATION_CHIPS = [
-  { emoji: "📸", label: "Erster Schultag" },
-  { emoji: "🎂", label: "Geburtstage" },
-  { emoji: "🏖", label: "Familienurlaub" },
-  { emoji: "⚽", label: "Erstes Fußballspiel" },
-  { emoji: "🐶", label: "Neues Haustier" },
-];
-
-function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; height?: number }) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <View style={{ width, height, borderRadius: height / 2, overflow: "hidden" }}>
-      <Animated.View style={{ flex: 1, backgroundColor: COLORS.surfaceSecondary, opacity }} />
-    </View>
-  );
-}
-
-function InspirationChips() {
-  const router = useRouter();
-  return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 16 }}>
-      {INSPIRATION_CHIPS.map((chip) => {
-        const chipLabel = chip.emoji + " " + chip.label;
-        return (
-          <AnimatedPressable
-            key={chip.label}
-            onPress={() => {
-              console.log("[Memories] Inspiration chip pressed:", chip.label);
-              router.push("/post/new");
-            }}
-            style={{
-              backgroundColor: COLORS.surfaceSecondary,
-              borderRadius: 20,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: "500" }}>
-              {chipLabel}
-            </Text>
-          </AnimatedPressable>
-        );
-      })}
-    </View>
-  );
 }
 
 function EmptyStateNoData() {
@@ -276,50 +201,30 @@ function MemoryCard({ memory, index }: { memory: TodayMemory; index: number }) {
 
 export default function MemoriesScreen() {
   const insets = useSafeAreaInsets();
-  const [todayMemories, setTodayMemories] = useState<TodayMemory[]>([]);
-  const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = useCallback(async () => {
-    console.log("[Memories] Loading memories data");
-    try {
-      const [memoriesData, postsData] = await Promise.all([
-        apiGet<{ memories: any[] }>("/api/memories/today").catch(() => null),
-        apiGet<{ posts: Post[] } | Post[]>("/api/posts").catch(() => ({ posts: [] })),
-      ]);
+  const postsQuery = usePosts();
+  const todayMemoryQuery = useTodayMemory();
 
-      console.log("[Memories] Data loaded");
+  const allPosts = postsQuery.data ?? [];
+  const todayMemories = todayMemoryQuery.data ?? [];
+  const loading = postsQuery.isLoading || todayMemoryQuery.isLoading;
 
-      // Backend returns { memories: [rawPost, ...] }; adapt to TodayMemory[].
-      const memories: TodayMemory[] = (memoriesData?.memories ?? []).map((m: any) => ({
-        id: m.id,
-        year: new Date(m.event_date).getFullYear(),
-        post: { ...m, text: m.raw_text ?? "", media: m.media ?? [] },
-      }));
-      setTodayMemories(memories);
-
-      // Backend returns { posts, total }; normalize to an array and map raw_text -> text.
-      const rawPosts = Array.isArray(postsData) ? postsData : postsData?.posts ?? [];
-      const posts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "", media: p.media ?? [] }));
-      setAllPosts(posts);
-
-      const years = [...new Set(posts.map((p) => getYear(p.created_at)))].sort((a, b) => b - a);
-      setAvailableYears(years);
-      if (years.length > 0) setSelectedYear(years[0]);
-    } catch (err) {
-      console.error("[Memories] Load error:", err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const availableYears = useMemo(
+    () => [...new Set(allPosts.map((p) => getYear(p.created_at)))].sort((a, b) => b - a),
+    [allPosts]
+  );
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (availableYears.length > 0) setSelectedYear(availableYears[0]);
+  }, [availableYears]);
+
+  const handleRefresh = () => {
+    console.log("[Memories] Pull to refresh");
+    setRefreshing(true);
+    Promise.all([postsQuery.refetch(), todayMemoryQuery.refetch()]).finally(() => setRefreshing(false));
+  };
 
   const filteredPosts = allPosts.filter((p) => getYear(p.created_at) === selectedYear);
 
@@ -344,11 +249,7 @@ export default function MemoriesScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              console.log("[Memories] Pull to refresh");
-              setRefreshing(true);
-              loadData();
-            }}
+            onRefresh={handleRefresh}
             tintColor={COLORS.primary}
           />
         }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -16,89 +16,19 @@ import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatRelativeDate } from "@/utils/dateUtils";
+import { SkeletonLine } from "@/components/SkeletonLine";
+import { InspirationChips } from "@/components/InspirationChips";
+import { AuthorAvatar } from "@/components/AuthorAvatar";
+import { usePosts } from "@/hooks/usePosts";
+import { useFamily } from "@/hooks/useFamily";
+import { useTodayMemory } from "@/hooks/useTodayMemory";
+import type { Post, FamilyMember, FamilyStats, TodayMemory } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
   if (typeof source === "string") return { uri: source };
   return source as ImageSourcePropType;
-}
-
-interface Post {
-  id: string;
-  text: string;
-  ai_title?: string;
-  ai_story?: string;
-  ai_status: "pending" | "processing" | "done" | "failed";
-  tags: string[];
-  created_at: string;
-  author: {
-    id: string;
-    name: string;
-    image?: string;
-  };
-  media: Array<{
-    id: string;
-    url: string;
-    type: string;
-    thumbnail_url: string | null;
-  }>;
-}
-
-interface FamilyMember {
-  id: string;
-  name: string;
-  image?: string;
-  email?: string;
-}
-
-interface Family {
-  id: string;
-  name: string;
-  members?: FamilyMember[];
-}
-
-interface TodayMemory {
-  id: string;
-  year: number;
-  post: Post;
-}
-
-interface FamilyStats {
-  photos: number;
-  videos: number;
-  memories: number;
-}
-
-const INSPIRATION_CHIPS = [
-  { emoji: "📸", label: "Erster Schultag" },
-  { emoji: "🎂", label: "Geburtstage" },
-  { emoji: "🏖", label: "Familienurlaub" },
-  { emoji: "⚽", label: "Erstes Fußballspiel" },
-  { emoji: "🐶", label: "Neues Haustier" },
-];
-
-function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; height?: number }) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <View style={{ width, height, borderRadius: height / 2, overflow: "hidden" }}>
-      <Animated.View
-        style={{
-          flex: 1,
-          backgroundColor: COLORS.surfaceSecondary,
-          opacity,
-        }}
-      />
-    </View>
-  );
 }
 
 function PostCardSkeleton() {
@@ -127,42 +57,6 @@ function PostCardSkeleton() {
       <SkeletonLine width="100%" height={13} />
       <SkeletonLine width="70%" height={13} />
       <SkeletonLine width="100%" height={120} />
-    </View>
-  );
-}
-
-function AuthorAvatar({ author, size = 40 }: { author: { name: string; image?: string }; size?: number }) {
-  const initials = (author.name || "?")
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
-  if (author.image) {
-    return (
-      <Image
-        source={resolveImageSource(author.image)}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        contentFit="cover"
-      />
-    );
-  }
-
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: COLORS.primaryMuted,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Text style={{ fontSize: size * 0.35, fontWeight: "700", color: COLORS.primary }}>
-        {initials}
-      </Text>
     </View>
   );
 }
@@ -478,36 +372,6 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
   );
 }
 
-function InspirationChips() {
-  const router = useRouter();
-  return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 16 }}>
-      {INSPIRATION_CHIPS.map((chip) => {
-        const chipLabel = chip.emoji + " " + chip.label;
-        return (
-          <AnimatedPressable
-            key={chip.label}
-            onPress={() => {
-              console.log("[Feed] Inspiration chip pressed:", chip.label);
-              router.push("/post/new");
-            }}
-            style={{
-              backgroundColor: COLORS.surfaceSecondary,
-              borderRadius: 20,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: "500" }}>
-              {chipLabel}
-            </Text>
-          </AnimatedPressable>
-        );
-      })}
-    </View>
-  );
-}
-
 function EmptyState() {
   const router = useRouter();
   const headline = "✨ Eure Familiengeschichte beginnt hier";
@@ -580,88 +444,52 @@ export default function FeedScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [family, setFamily] = useState<Family | null>(null);
-  const [todayMemory, setTodayMemory] = useState<TodayMemory | null>(null);
   const [stats, setStats] = useState<FamilyStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    console.log("[Feed] Loading feed data");
-    try {
-      setError(null);
-      const [familyData, postsData, memoryData] = await Promise.all([
-        apiGet<Family | Family[]>("/api/families").catch(() => null),
-        apiGet<{ posts: Post[] } | Post[]>("/api/posts").catch(() => ({ posts: [] })),
-        apiGet<{ memories: any[] }>("/api/memories/today").catch(() => null),
-      ]);
+  const postsQuery = usePosts();
+  const familyQuery = useFamily();
+  const todayMemoryQuery = useTodayMemory();
 
-      // Backend returns { posts, total }; normalize to an array and map raw_text -> text.
-      const rawPosts = Array.isArray(postsData) ? postsData : postsData?.posts ?? [];
-      const normalizedPosts: Post[] = rawPosts.map((p: any) => ({ ...p, text: p.raw_text ?? p.text ?? "", media: p.media ?? [] }));
-
-      console.log("[Feed] Data loaded - family:", familyData, "posts count:", normalizedPosts.length);
-
-      if (familyData) {
-        const fam = Array.isArray(familyData) ? familyData[0] : familyData;
-        setFamily(fam || null);
-        if (!fam) {
-          console.log("[Feed] No family found, redirecting to onboarding");
-          router.replace("/onboarding");
-          return;
-        }
-
-        // Fetch stats only when we have a family and posts
-        const resolvedPosts = normalizedPosts;
-        if (resolvedPosts.length > 0) {
-          apiGet<FamilyStats>("/api/families/stats")
-            .then((s) => {
-              console.log("[Feed] Stats loaded:", s);
-              setStats(s);
-            })
-            .catch(() => {
-              console.log("[Feed] Stats fetch failed, skipping stats row");
-            });
-        }
-      } else {
-        console.log("[Feed] No family data, redirecting to onboarding");
-        router.replace("/onboarding");
-        return;
-      }
-
-      setPosts(normalizedPosts);
-
-      // Backend returns { memories: [rawPost, ...] }; adapt the first one to a TodayMemory.
-      const memList = memoryData?.memories ?? [];
-      const firstMem = memList[0];
-      setTodayMemory(
-        firstMem
-          ? {
-              id: firstMem.id,
-              year: new Date(firstMem.event_date).getFullYear(),
-              post: { ...firstMem, text: firstMem.raw_text ?? "", media: firstMem.media ?? [] },
-            }
-          : null
-      );
-    } catch (err: any) {
-      console.error("[Feed] Load error:", err);
-      setError("Fehler beim Laden. Bitte versuche es erneut.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const posts = postsQuery.data ?? [];
+  const family = familyQuery.data ?? null;
+  const todayMemory = todayMemoryQuery.data?.[0] ?? null;
+  const loading = postsQuery.isLoading || familyQuery.isLoading || todayMemoryQuery.isLoading;
+  const error = postsQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (familyQuery.isFetched && !familyQuery.data) {
+      console.log("[Feed] No family found, redirecting to onboarding");
+      router.replace("/onboarding");
+    }
+  }, [familyQuery.isFetched, familyQuery.data, router]);
+
+  useEffect(() => {
+    if (family && posts.length > 0) {
+      apiGet<FamilyStats>("/api/families/stats")
+        .then((s) => {
+          console.log("[Feed] Stats loaded:", s);
+          setStats(s);
+        })
+        .catch(() => {
+          console.log("[Feed] Stats fetch failed, skipping stats row");
+        });
+    }
+  }, [family, posts.length]);
 
   const handleRefresh = () => {
     console.log("[Feed] Pull to refresh triggered");
     setRefreshing(true);
-    loadData();
+    Promise.all([postsQuery.refetch(), familyQuery.refetch(), todayMemoryQuery.refetch()]).finally(() => {
+      setRefreshing(false);
+    });
+  };
+
+  const handleRetry = () => {
+    console.log("[Feed] Retry button pressed");
+    postsQuery.refetch();
+    familyQuery.refetch();
+    todayMemoryQuery.refetch();
   };
 
   const renderHeader = () => (
@@ -715,11 +543,7 @@ export default function FeedScreen() {
             {error}
           </Text>
           <AnimatedPressable
-            onPress={() => {
-              console.log("[Feed] Retry button pressed");
-              setLoading(true);
-              loadData();
-            }}
+            onPress={handleRetry}
             style={{
               backgroundColor: COLORS.primary,
               borderRadius: 12,

@@ -15,6 +15,7 @@ import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet } from "@/utils/api";
+import { SkeletonLine } from "@/components/SkeletonLine";
 
 interface FamilyMember {
   id: string;
@@ -62,23 +63,6 @@ function MemberAvatar({ member }: { member: FamilyMember }) {
       <Text style={{ fontSize: 15, fontWeight: "700", color: COLORS.primary }}>
         {initials}
       </Text>
-    </View>
-  );
-}
-
-function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; height?: number }) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <View style={{ width, height, borderRadius: height / 2, overflow: "hidden" }}>
-      <Animated.View style={{ flex: 1, backgroundColor: COLORS.surfaceSecondary, opacity }} />
     </View>
   );
 }

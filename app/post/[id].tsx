@@ -17,46 +17,9 @@ import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet, apiDelete } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatFullDate, formatRelativeDate } from "@/utils/dateUtils";
-
-interface Post {
-  id: string;
-  text: string;
-  ai_title?: string;
-  ai_story?: string;
-  ai_status: "pending" | "processing" | "done" | "failed";
-  tags: string[];
-  created_at: string;
-  date?: string;
-  author: {
-    id: string;
-    name: string;
-    image?: string;
-  };
-  media: Array<{
-    id: string;
-    url: string;
-    type: string;
-    thumbnail_url: string | null;
-    filename?: string;
-  }>;
-}
-
-function SkeletonLine({ width, height = 14 }: { width: number | `${number}%`; height?: number }) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <View style={{ width, height, borderRadius: height / 2, overflow: "hidden" }}>
-      <Animated.View style={{ flex: 1, backgroundColor: COLORS.surfaceSecondary, opacity }} />
-    </View>
-  );
-}
+import { SkeletonLine } from "@/components/SkeletonLine";
+import { AuthorAvatar } from "@/components/AuthorAvatar";
+import type { Post } from "@/types";
 
 function ProcessingDots() {
   const dot1 = useRef(new Animated.Value(0.3)).current;
@@ -226,13 +189,6 @@ export default function PostDetailScreen() {
   const postDate = post.date || post.created_at;
   const displayDate = formatFullDate(postDate);
   const relativeDate = formatRelativeDate(post.created_at);
-
-  const authorInitials = (post.author.name || "?")
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
 
   const hasPhotos = photos.length > 0;
 
@@ -485,28 +441,7 @@ export default function PostDetailScreen() {
 
             {/* Author + Date */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              {post.author.image ? (
-                <Image
-                  source={{ uri: post.author.image }}
-                  style={{ width: 36, height: 36, borderRadius: 18 }}
-                  contentFit="cover"
-                />
-              ) : (
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: COLORS.primaryMuted,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: COLORS.primary }}>
-                    {authorInitials}
-                  </Text>
-                </View>
-              )}
+              <AuthorAvatar author={post.author} size={36} />
               <View>
                 <Text style={{ fontSize: 14, fontWeight: "600", color: COLORS.text }}>
                   {post.author.name || "Unbekannt"}

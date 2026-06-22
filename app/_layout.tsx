@@ -16,6 +16,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 const DevErrorBoundary = __DEV__
   ? ErrorBoundary
@@ -129,9 +130,11 @@ export default function RootLayout() {
   return (
     <DevErrorBoundary>
       <StatusBar style="auto" animated />
-      <AuthProvider>
-        <RootLayoutInner />
-      </AuthProvider>
+      <QueryProvider>
+        <AuthProvider>
+          <RootLayoutInner />
+        </AuthProvider>
+      </QueryProvider>
     </DevErrorBoundary>
   );
 }

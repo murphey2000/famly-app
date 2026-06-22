@@ -15,20 +15,14 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system/legacy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { X, Camera, Tag, Plus, Trash2, Calendar } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { apiPost, apiDelete, apiGet, BACKEND_URL, getBearerToken } from "@/utils/api";
+import { apiPost, apiDelete, apiGet, BACKEND_URL } from "@/utils/api";
+import { uploadFile, type SelectedImage } from "@/services/upload";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-
-interface SelectedImage {
-  uri: string;
-  fileName?: string;
-  mimeType?: string;
-}
 
 function Toast({ message, visible }: { message: string; visible: boolean }) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -140,57 +134,7 @@ export default function NewPostScreen() {
 
   const uploadImage = async (postId: string, image: SelectedImage) => {
     const fileName = image.fileName || `photo_${Date.now()}.jpg`;
-    const contentType = image.mimeType || "image/jpeg";
-
-    let publicUrl: string;
-
-    if (Platform.OS === "web") {
-      // On web, upload directly to our backend to avoid CORS issues with storage proxy
-      console.log("[NewPost] Web: uploading via backend /api/upload-file");
-      const token = await getBearerToken();
-      const imageResponse = await fetch(image.uri);
-      const blob = await imageResponse.blob();
-      const formData = new FormData();
-      formData.append("file", new Blob([blob], { type: contentType }), fileName);
-      formData.append("filename", fileName);
-      formData.append("content_type", contentType);
-
-      const uploadResponse = await fetch(`${BACKEND_URL}/api/upload-file`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) {
-        const text = await uploadResponse.text();
-        throw new Error(`Upload failed: ${uploadResponse.status} - ${text}`);
-      }
-
-      const result = await uploadResponse.json();
-      console.log("[NewPost] Web upload result:", JSON.stringify(result));
-      publicUrl = result.public_url ?? result.url;
-      if (!publicUrl) {
-        throw new Error("Upload response missing URL: " + JSON.stringify(result));
-      }
-    } else {
-      // On native, use signed URL + FileSystem.uploadAsync
-      console.log("[NewPost] Native: uploading via signed URL");
-      const { upload_url, public_url } = await apiPost<{ upload_url: string; public_url: string }>(
-        "/api/upload-url",
-        { filename: fileName, content_type: contentType }
-      );
-      console.log("[NewPost] Native upload-url response — upload_url:", upload_url, "public_url:", public_url);
-
-      const uploadResult = await FileSystem.uploadAsync(upload_url, image.uri, {
-        httpMethod: "PUT",
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        headers: { "Content-Type": contentType },
-      });
-      if (uploadResult.status < 200 || uploadResult.status >= 300) {
-        throw new Error(`Upload failed: ${uploadResult.status}`);
-      }
-      publicUrl = public_url;
-    }
+    const publicUrl = await uploadFile({ ...image, fileName }, BACKEND_URL);
 
     console.log("[NewPost] Registering media — postId:", postId, "url:", publicUrl, "type: photo");
     await apiPost(`/api/posts/${postId}/media`, {
