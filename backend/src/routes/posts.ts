@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 
@@ -50,6 +50,7 @@ export function registerPostsRoutes(app: App) {
                           id: { type: 'string', format: 'uuid' },
                           url: { type: 'string' },
                           type: { type: 'string' },
+                          thumbnail_url: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                         },
                       },
                     },
@@ -99,37 +100,52 @@ export function registerPostsRoutes(app: App) {
         .from(schema.posts)
         .where(eq(schema.posts.family_id, familyMember[0].family_id));
 
-      const postsWithDetails = await Promise.all(
-        postsData.map(async (p) => {
-          const author = await app.db
-            .select()
-            .from(authSchema.user)
-            .where(eq(authSchema.user.id, p.author_id))
-            .limit(1);
+      // Batch query all unique author IDs
+      const authorIds = [...new Set(postsData.map((p) => p.author_id))];
+      const authors = await app.db
+        .select()
+        .from(authSchema.user)
+        .where(inArray(authSchema.user.id, authorIds));
+      const authorMap = new Map(authors.map((a) => [a.id, a]));
 
-          const mediaRows = await app.db
-            .select()
-            .from(schema.media)
-            .where(eq(schema.media.post_id, p.id));
+      // Batch query all media for all posts
+      const postIds = postsData.map((p) => p.id);
+      const allMedia = await app.db
+        .select()
+        .from(schema.media)
+        .where(inArray(schema.media.post_id, postIds));
 
-          app.logger.info({ postId: p.id, author_id: p.author_id }, `author_id being returned: ${p.author_id}`);
+      // Group media by post_id
+      const mediaByPostId = new Map<string, typeof allMedia>();
+      for (const m of allMedia) {
+        if (!mediaByPostId.has(m.post_id)) {
+          mediaByPostId.set(m.post_id, []);
+        }
+        mediaByPostId.get(m.post_id)!.push(m);
+      }
 
-          return {
-            ...p,
-            author: {
-              id: p.author_id,
-              name: author[0].name,
-              image: author[0].image,
-            },
-            media_count: mediaRows.length,
-            media: mediaRows.map((m) => ({
-              id: m.id,
-              url: m.url,
-              type: m.type,
-            })),
-          };
-        })
-      );
+      const postsWithDetails = postsData.map((p) => {
+        const author = authorMap.get(p.author_id);
+        const mediaRows = mediaByPostId.get(p.id) || [];
+
+        app.logger.info({ postId: p.id, author_id: p.author_id }, `author_id being returned: ${p.author_id}`);
+
+        return {
+          ...p,
+          author: {
+            id: p.author_id,
+            name: author?.name || '',
+            image: author?.image || null,
+          },
+          media_count: mediaRows.length,
+          media: mediaRows.map((m) => ({
+            id: m.id,
+            url: m.url,
+            type: m.type,
+            thumbnail_url: m.thumbnail_url,
+          })),
+        };
+      });
 
       app.logger.info({ count: postsWithDetails.length, total: totalResult.length }, 'Posts retrieved');
 
@@ -246,6 +262,7 @@ export function registerPostsRoutes(app: App) {
                     id: { type: 'string', format: 'uuid' },
                     url: { type: 'string' },
                     type: { type: 'string' },
+                    thumbnail_url: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                   },
                 },
               },
@@ -274,7 +291,7 @@ export function registerPostsRoutes(app: App) {
         .where(eq(authSchema.user.id, post[0].author_id))
         .limit(1);
 
-      const media = await app.db
+      const mediaRows = await app.db
         .select()
         .from(schema.media)
         .where(eq(schema.media.post_id, post[0].id));
@@ -288,7 +305,12 @@ export function registerPostsRoutes(app: App) {
           name: author[0].name,
           image: author[0].image,
         },
-        media,
+        media: mediaRows.map((m) => ({
+          id: m.id,
+          url: m.url,
+          type: m.type,
+          thumbnail_url: m.thumbnail_url,
+        })),
       };
     }
   );
