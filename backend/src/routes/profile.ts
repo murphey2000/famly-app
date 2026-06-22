@@ -127,6 +127,51 @@ export function registerProfileRoutes(app: App) {
   );
 
   app.fastify.post(
+    '/api/profile/push-token',
+    {
+      schema: {
+        description: 'Save Expo push token for current user',
+        tags: ['profile'],
+        body: {
+          type: 'object',
+          required: ['token'],
+          properties: {
+            token: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+            },
+          },
+          401: {
+            type: 'object',
+            properties: { error: { type: 'string' } },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Body: { token: string } }>,
+      reply: FastifyReply
+    ) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ userId: session.user.id }, 'Saving push token');
+
+      await app.db
+        .update(authSchema.user)
+        .set({ push_token: request.body.token })
+        .where(eq(authSchema.user.id, session.user.id));
+
+      return { success: true };
+    }
+  );
+
+  app.fastify.post(
     '/api/newsletter/generate',
     {
       schema: {

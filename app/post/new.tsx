@@ -16,11 +16,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { X, Camera, Tag, Plus, Trash2, Calendar } from "lucide-react-native";
+import { X, Camera, Tag, Plus, Trash2, Calendar, Play } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiPost, apiDelete, apiGet, BACKEND_URL } from "@/utils/api";
-import { uploadFile, type SelectedImage } from "@/services/upload";
+import { uploadFile, type SelectedMedia } from "@/services/upload";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -72,7 +72,7 @@ export default function NewPostScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [images, setImages] = useState<SelectedImage[]>([]);
+  const [images, setImages] = useState<SelectedMedia[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -97,18 +97,22 @@ export default function NewPostScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsMultipleSelection: true,
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      console.log("[NewPost] Images selected:", result.assets.length);
-      const newImages: SelectedImage[] = result.assets.map((asset) => ({
-        uri: asset.uri,
-        fileName: asset.fileName || `photo_${Date.now()}.jpg`,
-        mimeType: asset.mimeType || "image/jpeg",
-      }));
+      console.log("[NewPost] Media selected:", result.assets.length);
+      const newImages: SelectedMedia[] = result.assets.map((asset) => {
+        const mediaType: "photo" | "video" = asset.type === "video" ? "video" : "photo";
+        return {
+          uri: asset.uri,
+          fileName: asset.fileName || `${mediaType}_${Date.now()}.${mediaType === "video" ? "mp4" : "jpg"}`,
+          mimeType: asset.mimeType || (mediaType === "video" ? "video/mp4" : "image/jpeg"),
+          mediaType,
+        };
+      });
       setImages((prev) => [...prev, ...newImages]);
     }
   };
@@ -132,20 +136,6 @@ export default function NewPostScreen() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const uploadImage = async (postId: string, image: SelectedImage) => {
-    const fileName = image.fileName || `photo_${Date.now()}.jpg`;
-    const publicUrl = await uploadFile({ ...image, fileName }, BACKEND_URL);
-
-    console.log("[NewPost] Registering media — postId:", postId, "url:", publicUrl, "type: photo");
-    await apiPost(`/api/posts/${postId}/media`, {
-      url: publicUrl,
-      type: "photo",
-      filename: fileName,
-    });
-
-    return publicUrl;
-  };
-
   const handleSave = async () => {
     console.log("[NewPost] KI-Story erstellen button pressed");
     if (!text.trim()) {
@@ -166,9 +156,9 @@ export default function NewPostScreen() {
       console.log("[NewPost] Post created with id:", post.id);
 
       if (images.length > 0) {
-        console.log("[NewPost] Uploading", images.length, "images");
-        await Promise.all(images.map((img) => uploadImage(post.id, img)));
-        console.log("[NewPost] All images uploaded");
+        console.log("[NewPost] Uploading", images.length, "media items");
+        await Promise.all(images.map((img) => uploadFile(img, BACKEND_URL, post.id)));
+        console.log("[NewPost] All media uploaded");
       }
 
       console.log("[NewPost] POST /api/posts/" + post.id + "/generate-preview");
@@ -473,6 +463,34 @@ export default function NewPostScreen() {
                     style={{ width: 100, height: 100, borderRadius: 12 }}
                     contentFit="cover"
                   />
+                  {img.mediaType === "video" && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        borderRadius: 12,
+                        backgroundColor: "rgba(0,0,0,0.25)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: "rgba(0,0,0,0.5)",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+                      </View>
+                    </View>
+                  )}
                   <AnimatedPressable
                     onPress={() => handleRemoveImage(i)}
                     style={{

@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
 import { getBearerToken } from "@/utils/api";
+import { registerForPushNotifications, savePushToken } from "@/services/notifications";
 
 interface User {
   id: string;
@@ -105,6 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await setBearerToken(sessionToken);
           console.log("[AuthContext] Recovered bearer token from session");
         }
+
+        registerForPushNotifications()
+          .then((token) => (token ? savePushToken(token) : undefined))
+          .catch((error) => {
+            console.error("[AuthContext] Push notification registration failed:", error);
+          });
       } else {
         setUser(null);
         await clearAuthTokens();

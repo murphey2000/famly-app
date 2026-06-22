@@ -34,7 +34,13 @@
       "expo-router",
       "expo-web-browser",
       "expo-secure-store",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Erlaube Famly den Zugriff auf deine Kamera, um QR-Codes zu scannen."
+        }
+      ]
     ],
     "scheme": "famly",
     "experiments": {

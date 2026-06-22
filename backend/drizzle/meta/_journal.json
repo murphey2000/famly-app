@@ -15,6 +15,13 @@
       "when": 1782024042821,
       "tag": "20260621064042_medical_raider",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782024142821,
+      "tag": "20260622120000_curly_steel_falcon",
+      "breakpoints": true
     }
   ]
 }

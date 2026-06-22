@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import { Video, ResizeMode } from "expo-av";
 import { ArrowLeft, Trash2, Tag } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -125,7 +126,7 @@ export default function PostDetailScreen() {
 
   console.log("[PostDetail] isAuthor check:", post?.author?.id, user?.id);
   const isAuthor = post?.author?.id === user?.id;
-  const photos = (post?.media ?? []).filter((m) => m.type === "photo");
+  const media = post?.media ?? [];
   const isProcessing = post?.ai_status === "processing" || post?.ai_status === "pending";
 
   if (loading) {
@@ -190,13 +191,13 @@ export default function PostDetailScreen() {
   const displayDate = formatFullDate(postDate);
   const relativeDate = formatRelativeDate(post.created_at);
 
-  const hasPhotos = photos.length > 0;
+  const hasMedia = media.length > 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
-        {/* Non-absolute header when no photo */}
-        {!hasPhotos && (
+        {/* Non-absolute header when no media */}
+        {!hasMedia && (
           <View
             style={{
               paddingTop: insets.top + 12,
@@ -331,14 +332,23 @@ export default function PostDetailScreen() {
           contentContainerStyle={{ paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero Photo with absolute header overlay */}
-          {hasPhotos && (
+          {/* Hero Media with absolute header overlay */}
+          {hasMedia && (
             <View style={{ position: "relative" }}>
-              <Image
-                source={{ uri: photos[selectedPhotoIndex]?.url }}
-                style={{ width: "100%", height: 320 }}
-                contentFit="cover"
-              />
+              {media[selectedPhotoIndex]?.type === "video" ? (
+                <Video
+                  source={{ uri: media[selectedPhotoIndex]?.url }}
+                  style={{ width: "100%", height: 320 }}
+                  useNativeControls
+                  resizeMode={ResizeMode.COVER}
+                />
+              ) : (
+                <Image
+                  source={{ uri: media[selectedPhotoIndex]?.url }}
+                  style={{ width: "100%", height: 320 }}
+                  contentFit="cover"
+                />
+              )}
               {/* Gradient overlay */}
               <View
                 style={{
@@ -516,18 +526,18 @@ export default function PostDetailScreen() {
               </View>
             )}
 
-            {/* Photo Grid */}
-            {photos.length > 1 && (
+            {/* Media Grid */}
+            {media.length > 1 && (
               <View>
                 <Text style={{ fontSize: 12, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 10 }}>
-                  {`ALLE FOTOS (${photos.length})`}
+                  {`ALLE MEDIEN (${media.length})`}
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {photos.map((photo, i) => (
+                  {media.map((item, i) => (
                     <AnimatedPressable
-                      key={photo.id}
+                      key={item.id}
                       onPress={() => {
-                        console.log("[PostDetail] Photo selected:", i);
+                        console.log("[PostDetail] Media selected:", i);
                         setSelectedPhotoIndex(i);
                       }}
                       style={{
@@ -539,11 +549,20 @@ export default function PostDetailScreen() {
                         borderColor: COLORS.primary,
                       }}
                     >
-                      <Image
-                        source={{ uri: photo.url }}
-                        style={{ width: "100%", height: "100%" }}
-                        contentFit="cover"
-                      />
+                      {item.type === "video" ? (
+                        <Video
+                          source={{ uri: item.url }}
+                          style={{ width: "100%", height: "100%" }}
+                          useNativeControls
+                          resizeMode={ResizeMode.COVER}
+                        />
+                      ) : (
+                        <Image
+                          source={{ uri: item.url }}
+                          style={{ width: "100%", height: "100%" }}
+                          contentFit="cover"
+                        />
+                      )}
                     </AnimatedPressable>
                   ))}
                 </View>

@@ -6,15 +6,19 @@ import {
   ScrollView,
   Animated,
   Alert,
+  Modal,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Users, Plus, Hash } from "lucide-react-native";
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import { Users, Plus, Hash, QrCode, X } from "lucide-react-native";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { COLORS } from "@/constants/Colors";
 import { authenticatedPost, getBearerToken } from "@/utils/api";
+
+const INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -24,6 +28,9 @@ export default function OnboardingScreen() {
   const [inviteCode, setInviteCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [hasScanned, setHasScanned] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -56,6 +63,34 @@ export default function OnboardingScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleOpenScanner = async () => {
+    console.log("[Onboarding] QR-Code scannen button pressed");
+    let permission = cameraPermission;
+    if (!permission?.granted) {
+      permission = await requestCameraPermission();
+    }
+    if (!permission?.granted) {
+      Alert.alert("Berechtigung erforderlich", "Bitte erlaube den Zugriff auf deine Kamera, um QR-Codes zu scannen");
+      return;
+    }
+    setHasScanned(false);
+    setShowScanner(true);
+  };
+
+  const handleBarcodeScanned = (result: BarcodeScanningResult) => {
+    if (hasScanned) return;
+    const scannedValue = result.data.trim().toUpperCase();
+    console.log("[Onboarding] QR code scanned:", scannedValue);
+    if (!INVITE_CODE_PATTERN.test(scannedValue)) {
+      console.log("[Onboarding] Scanned value is not a valid invite code, ignoring");
+      return;
+    }
+    setHasScanned(true);
+    setInviteCode(scannedValue);
+    setError(null);
+    setShowScanner(false);
   };
 
   const handleJoinFamily = async () => {
@@ -346,6 +381,24 @@ export default function OnboardingScreen() {
                     }}
                   />
                 </View>
+
+                <AnimatedPressable
+                  onPress={handleOpenScanner}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    height: 48,
+                    borderRadius: 12,
+                    backgroundColor: COLORS.accentMuted,
+                  }}
+                >
+                  <QrCode size={18} color={COLORS.accent} />
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: COLORS.accent }}>
+                    QR-Code scannen
+                  </Text>
+                </AnimatedPressable>
               </View>
 
               {error && (
@@ -371,6 +424,61 @@ export default function OnboardingScreen() {
           )}
         </Animated.View>
       </ScrollView>
+
+      {/* QR Scanner Modal */}
+      <Modal
+        visible={showScanner}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowScanner(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#000000" }}>
+          <CameraView
+            style={{ flex: 1 }}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+            onBarcodeScanned={handleBarcodeScanned}
+          />
+          <View
+            style={{
+              position: "absolute",
+              top: insets.top + 12,
+              left: 20,
+              right: 20,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <AnimatedPressable
+              onPress={() => setShowScanner(false)}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <X size={20} color="#FFFFFF" />
+            </AnimatedPressable>
+          </View>
+          <View
+            style={{
+              position: "absolute",
+              bottom: insets.bottom + 40,
+              left: 0,
+              right: 0,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 15, fontWeight: "600" }}>
+              Richte die Kamera auf den QR-Code
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

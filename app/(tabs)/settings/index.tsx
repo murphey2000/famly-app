@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
 import { Copy, Share2, LogOut, Users, ChevronRight, Check } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
@@ -108,7 +109,7 @@ export default function SettingsScreen() {
     console.log("[Settings] Share invite code pressed:", family.invite_code);
     try {
       await Share.share({
-        message: `Tritt unserer Familie "${family.name}" auf Famly bei! Einladungscode: ${family.invite_code}`,
+        message: `Tritt unserer Familie auf Famly bei! Einladungscode: ${family.invite_code}`,
         title: "Famly Einladung",
       });
     } catch (err) {
@@ -254,19 +255,18 @@ export default function SettingsScreen() {
                 </Text>
               </View>
 
-              {/* Invite Code */}
+              {/* Familie einladen */}
               <View>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 8 }}>
-                  Einladungscode
+                  Familie einladen
                 </Text>
                 <View
                   style={{
                     backgroundColor: COLORS.surfaceSecondary,
                     borderRadius: 12,
-                    padding: 14,
-                    flexDirection: "row",
+                    padding: 16,
                     alignItems: "center",
-                    justifyContent: "space-between",
+                    gap: 16,
                   }}
                 >
                   <Text
@@ -280,35 +280,56 @@ export default function SettingsScreen() {
                   >
                     {family.invite_code}
                   </Text>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
+
+                  <View
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: 12,
+                      padding: 12,
+                    }}
+                  >
+                    <QRCode value={family.invite_code} size={180} />
+                  </View>
+
+                  <View style={{ flexDirection: "row", gap: 8, width: "100%" }}>
                     <AnimatedPressable
                       onPress={handleCopyCode}
                       style={{
-                        width: 40,
-                        height: 40,
+                        flex: 1,
+                        height: 48,
                         borderRadius: 10,
                         backgroundColor: copied ? COLORS.accentMuted : COLORS.primaryMuted,
+                        flexDirection: "row",
                         alignItems: "center",
                         justifyContent: "center",
+                        gap: 8,
                       }}
                     >
                       {copied
                         ? <Check size={18} color={COLORS.accent} />
                         : <Copy size={18} color={COLORS.primary} />
                       }
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: copied ? COLORS.accent : COLORS.primary }}>
+                        {copied ? "Kopiert!" : "Code kopieren"}
+                      </Text>
                     </AnimatedPressable>
                     <AnimatedPressable
                       onPress={handleShare}
                       style={{
-                        width: 40,
-                        height: 40,
+                        flex: 1,
+                        height: 48,
                         borderRadius: 10,
                         backgroundColor: COLORS.primaryMuted,
+                        flexDirection: "row",
                         alignItems: "center",
                         justifyContent: "center",
+                        gap: 8,
                       }}
                     >
                       <Share2 size={18} color={COLORS.primary} />
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.primary }}>
+                        Teilen
+                      </Text>
                     </AnimatedPressable>
                   </View>
                 </View>

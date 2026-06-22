@@ -10,6 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import { Video, ResizeMode } from "expo-av";
 import { Plus, Clock, ChevronRight } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -174,7 +175,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
   }, []);
 
   const isProcessing = post.ai_status === "processing" || post.ai_status === "pending";
-  const photos = (post.media ?? []).filter((m) => m.type === "photo");
+  const media = post.media ?? [];
   const relativeDate = formatRelativeDate(post.created_at);
 
   const handlePress = () => {
@@ -255,20 +256,32 @@ function PostCard({ post, index }: { post: Post; index: number }) {
           </View>
         )}
 
-        {/* Photos */}
-        {photos.length > 0 && (
+        {/* Media */}
+        {media.length > 0 && (
           <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
-            {photos.slice(0, 3).map((photo, i) => (
-              <View key={photo.id} style={{ flex: 1, position: "relative" }}>
-                <Image
-                  source={resolveImageSource(photo.url)}
-                  style={{
-                    height: photos.length === 1 ? 180 : 100,
-                    borderRadius: 10,
-                  }}
-                  contentFit="cover"
-                />
-                {i === 2 && photos.length > 3 && (
+            {media.slice(0, 3).map((item, i) => (
+              <View key={item.id} style={{ flex: 1, position: "relative" }}>
+                {item.type === "video" ? (
+                  <Video
+                    source={{ uri: item.url }}
+                    style={{
+                      height: media.length === 1 ? 180 : 100,
+                      borderRadius: 10,
+                    }}
+                    useNativeControls
+                    resizeMode={ResizeMode.COVER}
+                  />
+                ) : (
+                  <Image
+                    source={resolveImageSource(item.url)}
+                    style={{
+                      height: media.length === 1 ? 180 : 100,
+                      borderRadius: 10,
+                    }}
+                    contentFit="cover"
+                  />
+                )}
+                {i === 2 && media.length > 3 && (
                   <View
                     style={{
                       position: "absolute",
@@ -280,7 +293,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
                     }}
                   >
                     <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-                      +{photos.length - 3}
+                      +{media.length - 3}
                     </Text>
                   </View>
                 )}

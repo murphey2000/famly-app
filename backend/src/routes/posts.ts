@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, ne, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 
@@ -620,6 +620,59 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
       const [publishedPost] = updated;
 
       app.logger.info({ postId: publishedPost.id }, 'Post published successfully');
+
+      try {
+        const family = await app.db
+          .select()
+          .from(schema.families)
+          .where(eq(schema.families.id, publishedPost.family_id))
+          .limit(1);
+
+        const otherMembers = await app.db
+          .select()
+          .from(schema.family_members)
+          .where(
+            and(
+              eq(schema.family_members.family_id, publishedPost.family_id),
+              ne(schema.family_members.user_id, publishedPost.author_id)
+            )
+          );
+
+        const otherMemberIds = otherMembers.map((m) => m.user_id);
+        const recipients = otherMemberIds.length
+          ? await app.db
+              .select()
+              .from(authSchema.user)
+              .where(inArray(authSchema.user.id, otherMemberIds))
+          : [];
+
+        const messages = recipients
+          .filter((r) => !!r.push_token)
+          .map((r) => ({
+            to: r.push_token,
+            title: family[0]?.name || 'Famly',
+            body: `${session.user.name} hat einen neuen Moment geteilt: ${publishedPost.ai_title}`,
+            data: { postId: publishedPost.id },
+          }));
+
+        if (messages.length > 0) {
+          app.logger.info(
+            { postId: publishedPost.id, recipientCount: messages.length },
+            'Sending push notifications to family members'
+          );
+          await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              'Accept-Encoding': 'gzip, deflate',
+            },
+            body: JSON.stringify(messages),
+          });
+        }
+      } catch (error) {
+        app.logger.error({ err: error, postId: publishedPost.id }, 'Failed to send push notifications');
+      }
 
       return publishedPost;
     }
