@@ -20,7 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
-import { X, Camera, Video as VideoIcon, MapPin, Play } from "lucide-react-native";
+import { X, Camera, Video as VideoIcon, MapPin, Play, Sparkles } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
@@ -87,6 +87,7 @@ export default function NewPostScreen() {
   const [previewState, setPreviewState] = useState<{ postId: string } | null>(null);
   const [editedTitle, setEditedTitle] = useState("");
   const [editedStory, setEditedStory] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const canPost = text.trim().length > 0 || media !== null;
 
@@ -188,15 +189,34 @@ export default function NewPostScreen() {
         console.log("[NewPost] Media uploaded");
       }
 
+      // Set preview state and start AI generation
+      setPreviewState({ postId: post.id });
+      setIsGenerating(true);
+
+      console.log("[NewPost] POST /api/posts/" + post.id + "/generate-ai");
+      try {
+        const aiResult = await apiPost<{ ai_title: string; ai_story: string }>(
+          `/api/posts/${post.id}/generate-ai`,
+          {}
+        );
+        console.log("[NewPost] AI generation success — title:", aiResult.ai_title?.slice(0, 60));
+        setEditedTitle(aiResult.ai_title ?? "");
+        setEditedStory(aiResult.ai_story ?? "");
+      } catch (aiErr: any) {
+        console.error("[NewPost] AI generation error:", aiErr);
+        Alert.alert("KI-Fehler", aiErr?.message || "KI-Story konnte nicht generiert werden");
+      } finally {
+        setIsGenerating(false);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["feed"] });
-      showToast("Beitrag veröffentlicht ✓");
-      setTimeout(() => router.back(), 700);
     } catch (err: any) {
       console.error("[NewPost] Post error:", err);
-      Alert.alert("Fehler", err?.message || "Beitrag konnte nicht veröffentlicht werden");
-    } finally {
       setIsLoading(false);
+      Alert.alert("Fehler", err?.message || "Beitrag konnte nicht veröffentlicht werden");
+      return;
     }
+    setIsLoading(false);
   };
 
   const handleDiscard = async () => {
@@ -239,8 +259,264 @@ export default function NewPostScreen() {
 
   const formattedDate = format(date, "d. MMMM yyyy", { locale: de });
 
-  const loadingLabel = isLoading ? "KI schreibt deine Geschichte..." : "KI-Story erstellen";
+  // ─── Preview screen ───────────────────────────────────────────────────────
+  if (previewState !== null) {
+    const publishLabel = isPublishing ? "Wird publiziert..." : "Publizieren";
+    const generatingLabel = "KI schreibt deine Geschichte...";
 
+    return (
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: COLORS.background }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* Preview header */}
+        <View
+          style={{
+            paddingTop: insets.top + 12,
+            paddingHorizontal: 16,
+            paddingBottom: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottomWidth: 1,
+            borderBottomColor: COLORS.divider,
+            backgroundColor: COLORS.surface,
+          }}
+        >
+          <AnimatedPressable
+            onPress={handleDiscard}
+            disabled={isPublishing}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                color: isPublishing ? COLORS.textTertiary : COLORS.danger,
+                fontWeight: "600",
+              }}
+            >
+              Verwerfen
+            </Text>
+          </AnimatedPressable>
+
+          <Text style={{ fontSize: 17, fontWeight: "700", color: COLORS.text }}>
+            Vorschau
+          </Text>
+
+          <AnimatedPressable
+            onPress={handlePublish}
+            disabled={isPublishing || isGenerating}
+            style={{
+              backgroundColor:
+                isPublishing || isGenerating ? COLORS.surfaceSecondary : COLORS.primary,
+              borderRadius: 10,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {isPublishing && <ActivityIndicator size="small" color="#FFFFFF" />}
+            <Text
+              style={{
+                color:
+                  isPublishing || isGenerating ? COLORS.textTertiary : "#FFFFFF",
+                fontSize: 15,
+                fontWeight: "700",
+              }}
+            >
+              {publishLabel}
+            </Text>
+          </AnimatedPressable>
+        </View>
+
+        <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+          <ScrollView
+            contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 60 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* AI badge */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                alignSelf: "flex-start",
+                backgroundColor: COLORS.primaryMuted,
+                borderRadius: 20,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+              }}
+            >
+              <Sparkles size={14} color={COLORS.primary} />
+              <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: "600" }}>
+                KI-generiert · Du kannst den Text bearbeiten
+              </Text>
+            </View>
+
+            {/* Generating state */}
+            {isGenerating ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 16,
+                  paddingVertical: 48,
+                }}
+              >
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: COLORS.textSecondary,
+                    fontWeight: "500",
+                    textAlign: "center",
+                  }}
+                >
+                  {generatingLabel}
+                </Text>
+              </View>
+            ) : (
+              <>
+                {/* Editable title */}
+                <View>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: COLORS.textTertiary,
+                      letterSpacing: 0.8,
+                      textTransform: "uppercase",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Titel
+                  </Text>
+                  <TextInput
+                    value={editedTitle}
+                    onChangeText={(v) => {
+                      console.log("[NewPost] Title edited");
+                      setEditedTitle(v);
+                    }}
+                    placeholder="Titel eingeben..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    multiline
+                    style={{
+                      fontSize: 22,
+                      fontWeight: "700",
+                      color: COLORS.text,
+                      lineHeight: 30,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 12,
+                      padding: 14,
+                      backgroundColor: COLORS.surface,
+                    }}
+                  />
+                </View>
+
+                {/* Editable story */}
+                <View>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: COLORS.textTertiary,
+                      letterSpacing: 0.8,
+                      textTransform: "uppercase",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Geschichte
+                  </Text>
+                  <TextInput
+                    value={editedStory}
+                    onChangeText={(v) => {
+                      console.log("[NewPost] Story edited");
+                      setEditedStory(v);
+                    }}
+                    placeholder="Geschichte eingeben..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    multiline
+                    textAlignVertical="top"
+                    style={{
+                      fontSize: 16,
+                      color: COLORS.text,
+                      lineHeight: 24,
+                      minHeight: 180,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 12,
+                      padding: 14,
+                      backgroundColor: COLORS.surface,
+                    }}
+                  />
+                </View>
+
+                {/* Media preview */}
+                {media && (
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: COLORS.textTertiary,
+                        letterSpacing: 0.8,
+                        textTransform: "uppercase",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Medien
+                    </Text>
+                    <View style={{ position: "relative", alignSelf: "flex-start" }}>
+                      <Image
+                        source={{ uri: media.uri }}
+                        style={{ width: 160, height: 160, borderRadius: 14 }}
+                        contentFit="cover"
+                      />
+                      {media.mediaType === "video" && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            borderRadius: 14,
+                            backgroundColor: "rgba(0,0,0,0.25)",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 20,
+                              backgroundColor: "rgba(0,0,0,0.5)",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Play size={20} color="#FFFFFF" fill="#FFFFFF" />
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </Pressable>
+
+        <Toast message={toastMessage} visible={toastVisible} />
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ─── Compose screen ───────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: COLORS.background }}
@@ -281,9 +557,9 @@ export default function NewPostScreen() {
 
         <AnimatedPressable
           onPress={handlePost}
-          disabled={!canPost}
+          disabled={!canPost || isLoading}
           style={{
-            backgroundColor: canPost ? COLORS.primary : COLORS.surfaceSecondary,
+            backgroundColor: canPost && !isLoading ? COLORS.primary : COLORS.surfaceSecondary,
             borderRadius: 10,
             paddingHorizontal: 16,
             paddingVertical: 8,
@@ -295,7 +571,7 @@ export default function NewPostScreen() {
           {isLoading && <ActivityIndicator size="small" color="#FFFFFF" />}
           <Text
             style={{
-              color: canPost ? "#FFFFFF" : COLORS.textTertiary,
+              color: canPost && !isLoading ? "#FFFFFF" : COLORS.textTertiary,
               fontSize: 15,
               fontWeight: "700",
             }}
