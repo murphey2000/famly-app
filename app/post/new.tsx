@@ -24,7 +24,7 @@ import { X, Camera, Video as VideoIcon, MapPin, Play } from "lucide-react-native
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
-import { apiPost, BACKEND_URL } from "@/utils/api";
+import { apiPost, apiDelete, BACKEND_URL } from "@/utils/api";
 import { uploadFile, type SelectedMedia } from "@/services/upload";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -82,6 +82,13 @@ export default function NewPostScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [date, setDate] = useState(new Date());
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [previewState, setPreviewState] = useState<{ postId: string } | null>(null);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [editedStory, setEditedStory] = useState("");
+
+  const canPost = text.trim().length > 0 || media !== null;
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
