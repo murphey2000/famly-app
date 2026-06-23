@@ -1250,6 +1250,20 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // Auth - Token
+  test("Get JWT token from session cookie", async () => {
+    const res = await authenticatedApi("/api/auth/token", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.token).toBeDefined();
+    expect(typeof data.token).toBe("string");
+  });
+
+  test("Get token without auth returns 401", async () => {
+    const res = await api("/api/auth/token");
+    await expectStatus(res, 401);
+  });
+
   // Feed
   test("Get family feed", async () => {
     const res = await authenticatedApi("/api/feed", authToken);
