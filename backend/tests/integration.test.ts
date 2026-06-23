@@ -529,6 +529,111 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
+  // Posts - Generate AI content
+  test("Generate AI content for a post with raw_text", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/generate-ai`,
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.ai_title).toBeDefined();
+    expect(data.ai_story).toBeDefined();
+  });
+
+  test("Generate AI content for post without raw_text returns 400", async () => {
+    // Create a post without raw_text
+    const createRes = await authenticatedApi("/api/posts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags: ["test"] }),
+    });
+    await expectStatus(createRes, 201);
+    const postData = await createRes.json();
+
+    const res = await authenticatedApi(
+      `/api/posts/${postData.id}/generate-ai`,
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Generate AI content for non-existent post returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/00000000-0000-0000-0000-000000000000/generate-ai",
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Generate AI content with invalid post UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid/generate-ai",
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Generate AI content without auth returns 401", async () => {
+    const res = await api(
+      `/api/posts/${postId}/generate-ai`,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Generate AI content for another user's post returns 403", async () => {
+    // Create a separate post by other user first
+    const { token: token2 } = await signUpTestUser();
+    // Create a family for the second user
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family AI" }),
+    });
+    await expectStatus(familyRes, 201);
+    const family2Data = await familyRes.json();
+
+    // Add first user to second user's family
+    const joinRes = await authenticatedApi("/api/families/join", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invite_code: family2Data.invite_code }),
+    });
+    await expectStatus(joinRes, 200);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Other user post for AI generation", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const otherPost = await postRes.json();
+
+    const res = await authenticatedApi(
+      `/api/posts/${otherPost.id}/generate-ai`,
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
   // Posts - Publish
   test("Publish a post", async () => {
     const res = await authenticatedApi(

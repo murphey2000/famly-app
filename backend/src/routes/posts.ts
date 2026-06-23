@@ -295,13 +295,13 @@ export function registerPostsRoutes(app: App) {
           raw_text: request.body.raw_text || null,
           event_date: eventDate,
           tags: request.body.tags || [],
-          ai_status: 'draft',
+          ai_status: 'pending',
         })
         .returning();
 
       const [createdPost] = post;
 
-      app.logger.info({ postId: createdPost.id }, 'Post created as draft');
+      app.logger.info({ postId: createdPost.id }, 'Post created with pending status');
 
       reply.status(201);
       return createdPost;
@@ -693,6 +693,202 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
       } catch (error) {
         app.logger.error({ err: error, postId: request.params.id }, 'Unexpected error during preview generation');
         return reply.status(500).send({ error: `Preview generation failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      }
+    }
+  );
+
+  app.fastify.post(
+    '/api/posts/:id/generate-ai',
+    {
+      schema: {
+        description: 'Generate AI content for a post using raw_text',
+        tags: ['posts'],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              ai_title: { type: 'string' },
+              ai_story: { type: 'string' },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ postId: request.params.id, userId: session.user.id }, 'Generating AI content for post');
+
+      // Look up the post
+      const post = await app.db
+        .select()
+        .from(schema.posts)
+        .where(eq(schema.posts.id, request.params.id))
+        .limit(1);
+
+      if (!post.length) {
+        app.logger.warn({ postId: request.params.id }, 'Post not found');
+        return reply.status(404).send({ error: 'Post not found' });
+      }
+
+      // Verify user is the author of the post
+      if (post[0].author_id !== session.user.id) {
+        app.logger.warn({ postId: request.params.id, userId: session.user.id }, 'Unauthorized AI generation attempt');
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+
+      // Verify user has access to this post's family (double-check)
+      const familyMember = await app.db
+        .select()
+        .from(schema.family_members)
+        .where(
+          and(
+            eq(schema.family_members.user_id, session.user.id),
+            eq(schema.family_members.family_id, post[0].family_id)
+          )
+        )
+        .limit(1);
+
+      if (!familyMember.length) {
+        app.logger.warn({ postId: request.params.id, userId: session.user.id }, 'User not in post family');
+        return reply.status(404).send({ error: 'Post not found' });
+      }
+
+      // Check if raw_text is provided
+      if (!post[0].raw_text || post[0].raw_text.trim() === '') {
+        app.logger.warn({ postId: request.params.id }, 'raw_text is empty');
+        return reply.status(400).send({ error: 'raw_text is required' });
+      }
+
+      // Set ai_status to 'generating'
+      await app.db
+        .update(schema.posts)
+        .set({
+          ai_status: 'generating',
+          updated_at: new Date(),
+        })
+        .where(eq(schema.posts.id, request.params.id));
+
+      app.logger.info({ postId: request.params.id }, 'Set ai_status to generating');
+
+      try {
+        if (!process.env.OPENROUTER_API_KEY) {
+          app.logger.error({}, 'OPENROUTER_API_KEY not configured');
+          await app.db
+            .update(schema.posts)
+            .set({
+              ai_status: 'error',
+              updated_at: new Date(),
+            })
+            .where(eq(schema.posts.id, request.params.id));
+          return reply.status(500).send({ error: 'AI generation failed' });
+        }
+
+        const systemPrompt = 'Du bist ein einfühlsamer Familienchronist. Schreibe warmherzige, persönliche Texte auf Deutsch.';
+        const userMessage = `Schreibe einen kurzen Titel (max. 8 Wörter) und eine warmherzige Geschichte (2-4 Sätze) basierend auf diesem Familienbeitrag: ${post[0].raw_text}\n\nAntworte ausschließlich als JSON-Objekt in diesem Format: {"title": "...", "story": "..."}`;
+
+        app.logger.info({ postId: request.params.id }, 'Calling OpenRouter API for AI generation');
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'openai/gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt,
+              },
+              {
+                role: 'user',
+                content: userMessage,
+              },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          app.logger.error({ status: response.status, error: errorText, postId: request.params.id }, 'OpenRouter API error');
+          await app.db
+            .update(schema.posts)
+            .set({
+              ai_status: 'error',
+              updated_at: new Date(),
+            })
+            .where(eq(schema.posts.id, request.params.id));
+          return reply.status(500).send({ error: 'AI generation failed' });
+        }
+
+        const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+        const content = data.choices[0].message.content;
+        app.logger.info({ postId: request.params.id, rawContent: content.slice(0, 500) }, 'Raw AI response');
+
+        // Strip markdown code fences if present
+        const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch (parseError) {
+          app.logger.error({ rawContent: content, postId: request.params.id }, 'JSON parse failed');
+          await app.db
+            .update(schema.posts)
+            .set({
+              ai_status: 'error',
+              updated_at: new Date(),
+            })
+            .where(eq(schema.posts.id, request.params.id));
+          return reply.status(500).send({ error: 'AI generation failed' });
+        }
+
+        const aiTitle = parsed.title || '';
+        const aiStory = parsed.story || '';
+
+        app.logger.info({ postId: request.params.id, titleLen: aiTitle.length, storyLen: aiStory.length }, 'AI content generated successfully');
+
+        // Update post with AI content and set status to 'done'
+        const updated = await app.db
+          .update(schema.posts)
+          .set({
+            ai_title: aiTitle,
+            ai_story: aiStory,
+            ai_status: 'done',
+            updated_at: new Date(),
+          })
+          .where(eq(schema.posts.id, request.params.id))
+          .returning();
+
+        app.logger.info({ postId: updated[0].id }, 'Post AI generation completed successfully');
+
+        return {
+          ai_title: aiTitle,
+          ai_story: aiStory,
+        };
+      } catch (error) {
+        app.logger.error({ err: error, postId: request.params.id }, 'Unexpected error during AI generation');
+        await app.db
+          .update(schema.posts)
+          .set({
+            ai_status: 'error',
+            updated_at: new Date(),
+          })
+          .where(eq(schema.posts.id, request.params.id));
+        return reply.status(500).send({ error: 'AI generation failed' });
       }
     }
   );
