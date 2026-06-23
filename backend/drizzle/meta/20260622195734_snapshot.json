@@ -739,22 +739,18 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "post_reactions_post_user_unique": {
-          "name": "post_reactions_post_user_unique",
+        "post_reactions_unique": {
+          "name": "post_reactions_unique",
           "nullsNotDistinct": false,
           "columns": [
             "post_id",
-            "user_id"
+            "user_id",
+            "emoji"
           ]
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "emoji_check": {
-          "name": "emoji_check",
-          "value": "\"emoji\" IN ('👍', '❤️', '😂')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.posts": {

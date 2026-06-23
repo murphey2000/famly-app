@@ -69,8 +69,7 @@ export const post_reactions = pgTable('post_reactions', {
   emoji: text('emoji').notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-  check('emoji_check', sql`"emoji" IN ('👍', '❤️', '😂')`),
-  unique('post_reactions_post_user_unique').on(table.post_id, table.user_id),
+  unique('post_reactions_unique').on(table.post_id, table.user_id, table.emoji),
 ]);
 
 export const newsletters = pgTable('newsletters', {

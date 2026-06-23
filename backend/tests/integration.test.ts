@@ -207,6 +207,79 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // Posts - Update
+  test("Update a post", async () => {
+    const res = await authenticatedApi(`/api/posts/${postId}`, authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        raw_text: "Updated post content",
+        tags: ["updated", "test"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(postId);
+  });
+
+  test("Update post with ai_title and ai_story", async () => {
+    const res = await authenticatedApi(`/api/posts/${postId}`, authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ai_title: "Updated Title",
+        ai_story: "Updated Story",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update post with event_date", async () => {
+    const res = await authenticatedApi(`/api/posts/${postId}`, authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_date: "2026-01-01T12:00:00Z",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update non-existent post returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_text: "Updated" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Update post with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid",
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_text: "Updated" }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Update post without auth returns 401", async () => {
+    const res = await api(`/api/posts/${postId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Unauthorized update" }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // Media - Create
   test("Add media to a post", async () => {
     const res = await authenticatedApi(`/api/posts/${postId}/media`, authToken, {
@@ -332,71 +405,6 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  // Upload URL
-  test("Get signed upload URL", async () => {
-    const res = await authenticatedApi("/api/upload-url", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: "test.jpg",
-        content_type: "image/jpeg",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.upload_url).toBeDefined();
-    expect(data.public_url).toBeDefined();
-  });
-
-  test("Get upload URL for video file", async () => {
-    const res = await authenticatedApi("/api/upload-url", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: "test-video.mp4",
-        content_type: "video/mp4",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.upload_url).toBeDefined();
-    expect(data.public_url).toBeDefined();
-  });
-
-  test("Get upload URL with missing filename returns 400", async () => {
-    const res = await authenticatedApi("/api/upload-url", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content_type: "image/jpeg",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Get upload URL with missing content_type returns 400", async () => {
-    const res = await authenticatedApi("/api/upload-url", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: "test.jpg",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Get upload URL without auth returns 401", async () => {
-    const res = await api("/api/upload-url", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: "test.jpg",
-        content_type: "image/jpeg",
-      }),
-    });
-    await expectStatus(res, 401);
-  });
-
   // Upload file
   test("Upload a file to S3 storage", async () => {
     const form = new FormData();
@@ -407,8 +415,9 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.public_url).toBeDefined();
+    expect(data.key).toBeDefined();
     expect(data.url).toBeDefined();
+    expect(data.public_url).toBeDefined();
   });
 
   test("Upload video file to S3 storage", async () => {
@@ -420,8 +429,9 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.public_url).toBeDefined();
+    expect(data.key).toBeDefined();
     expect(data.url).toBeDefined();
+    expect(data.public_url).toBeDefined();
   });
 
   test("Upload file without auth returns 401", async () => {
@@ -435,15 +445,6 @@ describe("API Integration Tests", () => {
   });
 
   test("Upload file without file returns 400", async () => {
-    const form = new FormData();
-    const res = await authenticatedApi("/api/upload-file", authToken, {
-      method: "POST",
-      body: form,
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Upload file without auth returns 500 (server error when processing empty form)", async () => {
     const form = new FormData();
     const res = await authenticatedApi("/api/upload-file", authToken, {
       method: "POST",
@@ -499,7 +500,36 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  // Posts - Publish (main flow)
+  test("Generate preview for another user's post returns 403", async () => {
+    // Create a separate post by other user first
+    const { token: token2 } = await signUpTestUser();
+    // Create a family for the second user
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family" }),
+    });
+    await expectStatus(familyRes, 201);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Other user post", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const otherPost = await postRes.json();
+
+    const res = await authenticatedApi(
+      `/api/posts/${otherPost.id}/generate-preview`,
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
+  // Posts - Publish
   test("Publish a post", async () => {
     const res = await authenticatedApi(
       `/api/posts/${postId}/publish`,
@@ -519,7 +549,6 @@ describe("API Integration Tests", () => {
     expect(data.ai_status).toBeDefined();
   });
 
-  // Posts - Publish error cases (using separate post)
   test("Publish post with missing ai_title returns 400", async () => {
     const res = await authenticatedApi(
       `/api/posts/${secondPostId}/publish`,
@@ -597,9 +626,256 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Publish another user's post returns 403", async () => {
+    // Create a separate post by other user for this test
+    const { token: token2 } = await signUpTestUser();
+    // Create a family for the second user
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family 2" }),
+    });
+    await expectStatus(familyRes, 201);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Other user post for publish", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const otherPost = await postRes.json();
+
+    const res = await authenticatedApi(
+      `/api/posts/${otherPost.id}/publish`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ai_title: "Test AI Title",
+          ai_story: "Test AI Story",
+        }),
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
+  // Posts - Reactions
+  test("Add reaction to a post", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/reactions`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "👍" }),
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.reactions)).toBe(true);
+  });
+
+  test("Add heart reaction to a post", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/reactions`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "❤️" }),
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.reactions)).toBe(true);
+  });
+
+  test("Add laugh reaction to a post", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/reactions`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "😂" }),
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.reactions)).toBe(true);
+  });
+
+  test("Add reaction with missing emoji returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/reactions`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add reaction with invalid emoji returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/reactions`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "🚀" }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add reaction to non-existent post returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/00000000-0000-0000-0000-000000000000/reactions",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "👍" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Add reaction with invalid post UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid/reactions",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "👍" }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add reaction without auth returns 401", async () => {
+    const res = await api(
+      `/api/posts/${postId}/reactions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "👍" }),
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Add reaction to another user's post returns 403", async () => {
+    const { token: token2 } = await signUpTestUser();
+    // Create a family for the second user
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family 3" }),
+    });
+    await expectStatus(familyRes, 201);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Other user post for reaction", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const otherPost = await postRes.json();
+
+    const res = await authenticatedApi(
+      `/api/posts/${otherPost.id}/reactions`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: "👍" }),
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
+  test("Remove reaction from a post", async () => {
+    const res = await authenticatedApi(
+      `/api/posts/${postId}/reactions`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.reactions)).toBe(true);
+  });
+
+  test("Remove reaction from non-existent post returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/00000000-0000-0000-0000-000000000000/reactions",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Remove reaction with invalid post UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/posts/invalid-uuid/reactions",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Remove reaction without auth returns 401", async () => {
+    const res = await api(
+      `/api/posts/${postId}/reactions`,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Remove reaction from another user's post returns 403", async () => {
+    const { token: token2 } = await signUpTestUser();
+    // Create a family for the second user
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family 4" }),
+    });
+    await expectStatus(familyRes, 201);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Other user post for remove reaction", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const otherPost = await postRes.json();
+
+    const res = await authenticatedApi(
+      `/api/posts/${otherPost.id}/reactions`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
   // Posts - Delete
   test("Delete a post", async () => {
-    const res = await authenticatedApi(`/api/posts/${postId}`, authToken, {
+    const res = await authenticatedApi(`/api/posts/${secondPostId}`, authToken, {
       method: "DELETE",
     });
     await expectStatus(res, 200);
@@ -608,7 +884,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Get deleted post returns 404", async () => {
-    const res = await authenticatedApi(`/api/posts/${postId}`, authToken);
+    const res = await authenticatedApi(`/api/posts/${secondPostId}`, authToken);
     await expectStatus(res, 404);
   });
 
@@ -631,22 +907,60 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete post without auth returns 401", async () => {
-    const res = await api(
-      `/api/posts/${secondPostId}`,
-      {
-        method: "DELETE",
-      }
-    );
+    const { token: token2 } = await signUpTestUser();
+    // Create a family for the second user
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family 5" }),
+    });
+    await expectStatus(familyRes, 201);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Post for delete auth test", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const testPost = await postRes.json();
+
+    const res = await api(`/api/posts/${testPost.id}`, {
+      method: "DELETE",
+    });
     await expectStatus(res, 401);
+  });
+
+  test("Delete another user's post returns 403", async () => {
+    const { token: token2 } = await signUpTestUser();
+    // Create a family for the second user
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family 6" }),
+    });
+    await expectStatus(familyRes, 201);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Other user post for delete", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const otherPost = await postRes.json();
+
+    const res = await authenticatedApi(`/api/posts/${otherPost.id}`, authToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 403);
   });
 
   // Families - Join
   test("Join family with valid invite code", async () => {
     // Create a second user to test joining
-    const { token: token2, user: user2 } = await signUpTestUser();
-    otherUserToken = token2; // Save for later 403 tests
+    const { token: token2 } = await signUpTestUser();
+    otherUserToken = token2; // Save for later use
 
-    // Join the first user's family using the invite code from earlier
+    // Have the new user create a family
     const familyRes = await authenticatedApi("/api/families", token2, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -656,7 +970,7 @@ describe("API Integration Tests", () => {
     const family2Data = await familyRes.json();
     const inviteCode = family2Data.invite_code;
 
-    // Have another user join via invite code
+    // Have first user join via invite code
     const joinRes = await authenticatedApi("/api/families/join", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -665,19 +979,6 @@ describe("API Integration Tests", () => {
     await expectStatus(joinRes, 200);
     const joinData = await joinRes.json();
     expect(joinData.id).toBe(family2Data.id);
-  });
-
-  // Create a post by the other user for authorization testing
-  test("Create a post as other user for authorization tests", async () => {
-    const res = await authenticatedApi("/api/posts", otherUserToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw_text: "Post by other user", tags: ["test"] }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    otherUserPostId = data.id;
-    expect(otherUserPostId).toBeDefined();
   });
 
   test("Join family with invalid invite code returns 404", async () => {
@@ -705,41 +1006,6 @@ describe("API Integration Tests", () => {
       body: JSON.stringify({}),
     });
     await expectStatus(res, 400);
-  });
-
-  // Post authorization tests (403)
-  test("Generate preview for another user's post returns 403", async () => {
-    const res = await authenticatedApi(
-      `/api/posts/${otherUserPostId}/generate-preview`,
-      authToken,
-      {
-        method: "POST",
-      }
-    );
-    await expectStatus(res, 403);
-  });
-
-  test("Publish another user's post returns 403", async () => {
-    const res = await authenticatedApi(
-      `/api/posts/${otherUserPostId}/publish`,
-      authToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ai_title: "Test AI Title",
-          ai_story: "Test AI Story",
-        }),
-      }
-    );
-    await expectStatus(res, 403);
-  });
-
-  test("Delete another user's post returns 403", async () => {
-    const res = await authenticatedApi(`/api/posts/${otherUserPostId}`, authToken, {
-      method: "DELETE",
-    });
-    await expectStatus(res, 403);
   });
 
   // Memories
