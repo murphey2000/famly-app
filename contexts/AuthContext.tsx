@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
-import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
+import { authClient, setBearerToken, clearAuthTokens, API_URL } from "@/lib/auth";
+import { getBearerToken } from "@/utils/api";
 import { registerForPushNotifications, savePushToken } from "@/services/notifications";
 
 interface User {
@@ -69,6 +70,26 @@ function openOAuthPopup(provider: string): Promise<string> {
   });
 }
 
+async function fetchAndStoreJwt() {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/token`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.token) {
+        await setBearerToken(data.token);
+        console.log("[AuthContext] JWT fetched and stored from /api/auth/token");
+      }
+    } else {
+      console.warn("[AuthContext] /api/auth/token returned", res.status);
+    }
+  } catch (e) {
+    console.warn("[AuthContext] Failed to fetch JWT from /api/auth/token", e);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,6 +118,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const session = await authClient.getSession();
       if (session?.data?.user) {
         setUser(session.data.user as User);
+        // Recovery: if we have a valid session but no bearer token (e.g. iOS stripped set-auth-jwt header), fetch it now
+        const existingToken = await getBearerToken();
+        if (!existingToken) {
+          console.log("[AuthContext] Session valid but no bearer token — fetching from /api/auth/token");
+          await fetchAndStoreJwt();
+        }
         registerForPushNotifications()
           .then((token) => (token ? savePushToken(token) : undefined))
           .catch((error) => {
@@ -126,7 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setBearerToken(token);
       console.log("[AuthContext] Bearer token saved from signIn response");
     } else {
-      console.warn("[AuthContext] No token in signIn response — auth may fail");
+      console.warn("[AuthContext] No token in signIn response — fetching from /api/auth/token");
+      await fetchAndStoreJwt();
     }
     await fetchUser();
   };
@@ -143,7 +171,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setBearerToken(token);
       console.log("[AuthContext] Bearer token saved from signUp response");
     } else {
-      console.warn("[AuthContext] No token in signUp response — auth may fail");
+      console.warn("[AuthContext] No token in signUp response — fetching from /api/auth/token");
+      await fetchAndStoreJwt();
     }
     await fetchUser();
   };
@@ -152,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (Platform.OS === "web") {
       const token = await openOAuthPopup(provider);
       await setBearerToken(token);
+      console.log("[AuthContext] Bearer token saved from web OAuth popup for:", provider);
       await fetchUser();
     } else {
       console.log("[AuthContext] signInWithSocial called for provider:", provider);
@@ -163,7 +193,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(error.message || "Social sign in failed");
       }
       const token = (data as any)?.token;
-      if (token) await setBearerToken(token);
+      if (token) {
+        await setBearerToken(token);
+        console.log("[AuthContext] Bearer token saved from social signIn response for:", provider);
+      } else {
+        console.warn("[AuthContext] No token in social signIn response — fetching from /api/auth/token");
+        await fetchAndStoreJwt();
+      }
       await fetchUser();
     }
   };
@@ -183,13 +219,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const { data, error } = await authClient.signIn.social({
         provider: "apple",
-        idToken: credential.identityToken,
+        idToken: credential.identityToken as any,
       });
       if (error) {
         throw new Error(error.message || "Apple sign in failed");
       }
       const token = (data as any)?.token;
-      if (token) await setBearerToken(token);
+      if (token) {
+        await setBearerToken(token);
+        console.log("[AuthContext] Bearer token saved from native Apple signIn response");
+      } else {
+        console.warn("[AuthContext] No token in native Apple signIn response — fetching from /api/auth/token");
+        await fetchAndStoreJwt();
+      }
       await fetchUser();
     } else {
       await signInWithSocial("apple");
