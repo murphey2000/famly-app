@@ -3,7 +3,6 @@ import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
-import { getBearerToken } from "@/utils/api";
 import { registerForPushNotifications, savePushToken } from "@/services/notifications";
 
 interface User {
@@ -98,16 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const session = await authClient.getSession();
       if (session?.data?.user) {
         setUser(session.data.user as User);
-        // Self-heal: if we have a live session but no stored bearer token
-        // (e.g. user logged in before token-saving was added), recover the
-        // session token so authenticated API calls work without re-login.
-        const existing = await getBearerToken();
-        const sessionToken = (session.data as any)?.session?.token;
-        if (!existing && sessionToken) {
-          await setBearerToken(sessionToken);
-          console.log("[AuthContext] Recovered bearer token from session");
-        }
-
         registerForPushNotifications()
           .then((token) => (token ? savePushToken(token) : undefined))
           .catch((error) => {
