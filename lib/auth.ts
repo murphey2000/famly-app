@@ -33,9 +33,27 @@ export const authClient = createAuthClient({
     // via JWKS — `session.data.session.token` is the session ID, not a
     // JWT, and storing that as the bearer would 401 every api-service call.
     onSuccess: async (ctx: { response: Response }) => {
+      console.log("[auth] onSuccess hook fired, status:", ctx.response.status, "url:", ctx.response.url);
+      // Try header first (works on web/Android)
       const jwt = ctx.response.headers.get("set-auth-jwt");
       if (jwt) {
+        console.log("[auth] JWT found in set-auth-jwt header, storing token");
         await setBearerToken(jwt);
+        return;
+      }
+      // Fallback: read from response body (needed on iOS where set-* headers are stripped)
+      try {
+        const cloned = ctx.response.clone();
+        const data = await cloned.json();
+        if (data?.token) {
+          console.log("[auth] JWT found in response body token field, storing token");
+          await setBearerToken(data.token);
+        } else {
+          console.log("[auth] No JWT found in header or body token field");
+        }
+      } catch (_) {
+        // not JSON or no token field — ignore
+        console.log("[auth] Could not parse response body for token fallback");
       }
     },
     ...(Platform.OS === "web" && {
