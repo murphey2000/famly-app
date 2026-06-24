@@ -23,6 +23,45 @@ app.withAuth({
 });
 app.withStorage();
 
+// Hook to inject JWT token into JSON response body for iOS compatibility
+app.fastify.addHook('onSend', async (request, reply, payload) => {
+  // Only intercept JSON responses from specific auth routes
+  const authRoutes = [
+    '/api/auth/sign-in/email',
+    '/api/auth/sign-up/email',
+    '/api/auth/get-session',
+  ];
+
+  if (!authRoutes.includes(request.url) || reply.getHeader('content-type')?.toString().includes('application/json') === false) {
+    return payload;
+  }
+
+  // Get the JWT token from the set-auth-jwt header
+  const jwtToken = reply.getHeader('set-auth-jwt');
+  if (!jwtToken) {
+    return payload;
+  }
+
+  try {
+    // Parse the response body
+    let body = payload;
+    if (Buffer.isBuffer(body)) {
+      body = body.toString('utf-8');
+    }
+
+    const parsed = JSON.parse(body as string);
+
+    // Inject the token
+    parsed.token = jwtToken;
+
+    // Return the modified body
+    return JSON.stringify(parsed);
+  } catch (error) {
+    app.logger.debug({ err: error }, 'Failed to inject JWT into response body');
+    return payload;
+  }
+});
+
 registerFamiliesRoutes(app);
 registerPostsRoutes(app);
 registerMediaRoutes(app);

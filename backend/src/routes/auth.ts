@@ -28,7 +28,7 @@ export function registerAuthRoutes(app: App) {
       app.logger.info({}, 'Fetching JWT token from session');
 
       try {
-        // If Authorization header has a Bearer token, extract and return it
+        // First, check if Authorization header has a Bearer token
         const authHeader = request.headers.authorization;
         if (authHeader?.startsWith('Bearer ')) {
           const token = authHeader.substring(7); // Remove 'Bearer ' prefix
@@ -36,13 +36,7 @@ export function registerAuthRoutes(app: App) {
           return { token };
         }
 
-        // Otherwise, use requireAuth to validate session cookie
-        const session = await requireAuth(request, reply);
-        if (!session) return;
-
-        app.logger.info({ userId: session.user.id }, 'Session found, generating JWT token');
-
-        // Try to get token using Better Auth API
+        // Try to get session from cookies
         const headers = new Headers();
         Object.entries(request.headers).forEach(([key, value]) => {
           if (value) {
@@ -50,7 +44,16 @@ export function registerAuthRoutes(app: App) {
           }
         });
 
-        // Use getToken from Better Auth to generate JWT for the session
+        const session = await app.auth.api.getSession({ headers });
+
+        if (!session) {
+          app.logger.warn({}, 'No valid session found for token request');
+          return reply.status(401).send({ error: 'Unauthorized' });
+        }
+
+        app.logger.info({ userId: session.user.id }, 'Session found, generating JWT token');
+
+        // Try to get token using Better Auth API
         const tokenResult = await (app.auth.api as any).getToken({ headers });
 
         if (!tokenResult?.token) {
