@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
+import * as SecureStore from "expo-secure-store";
 import { authClient, setBearerToken, clearAuthTokens, API_URL } from "@/lib/auth";
 import { getBearerToken } from "@/utils/api";
 import { registerForPushNotifications, savePushToken } from "@/services/notifications";
@@ -70,11 +71,23 @@ function openOAuthPopup(provider: string): Promise<string> {
   });
 }
 
-async function fetchAndStoreJwt() {
+async function fetchAndStoreJwt(sessionToken?: string) {
   try {
+    const headers: Record<string, string> = {};
+
+    // On iOS, no cookie session exists — use the Better Auth session token as Bearer
+    let tokenToUse = sessionToken;
+    if (!tokenToUse && Platform.OS !== "web") {
+      tokenToUse = (await SecureStore.getItemAsync("famly.session_token")) ?? undefined;
+    }
+    if (tokenToUse) {
+      headers["Authorization"] = `Bearer ${tokenToUse}`;
+    }
+
     const res = await fetch(`${API_URL}/api/auth/token`, {
       method: "GET",
       credentials: "include",
+      headers,
     });
     if (res.ok) {
       const data = await res.json();
@@ -122,7 +135,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const existingToken = await getBearerToken();
         if (!existingToken) {
           console.log("[AuthContext] Session valid but no bearer token — fetching from /api/auth/token");
-          await fetchAndStoreJwt();
+          // Pass the session token directly so the backend can validate it
+          const sessionToken = (session.data.session as any)?.token;
+          await fetchAndStoreJwt(sessionToken);
         }
         registerForPushNotifications()
           .then((token) => (token ? savePushToken(token) : undefined))
