@@ -31,6 +31,7 @@ describe("API Integration Tests", () => {
     familyId = data.id;
     expect(familyId).toBeDefined();
     expect(data.invite_code).toBeDefined();
+    expect(data.created_at).toBeDefined();
   });
 
   test("Create a family without name returns 400", async () => {
@@ -98,6 +99,7 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     postId = data.id;
     expect(postId).toBeDefined();
+    expect(data.ai_status).toBeDefined();
   });
 
   test("Create a second post for error case testing", async () => {
@@ -189,6 +191,8 @@ describe("API Integration Tests", () => {
     expect(data.id).toBe(postId);
     expect(Array.isArray(data.media)).toBe(true);
     expect(data.author).toBeDefined();
+    expect(data.created_at).toBeDefined();
+    expect(data.updated_at).toBeDefined();
   });
 
   test("Get non-existent post returns 404", async () => {
@@ -280,6 +284,31 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Update another user's post returns 403", async () => {
+    const { token: token2 } = await signUpTestUser();
+    const familyRes = await authenticatedApi("/api/families", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Other User Family Update" }),
+    });
+    await expectStatus(familyRes, 201);
+
+    const postRes = await authenticatedApi("/api/posts", token2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Other user post for update", tags: ["test"] }),
+    });
+    await expectStatus(postRes, 201);
+    const otherPost = await postRes.json();
+
+    const res = await authenticatedApi(`/api/posts/${otherPost.id}`, authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: "Unauthorized update" }),
+    });
+    await expectStatus(res, 403);
+  });
+
   // Media - Create
   test("Add media to a post", async () => {
     const res = await authenticatedApi(`/api/posts/${postId}/media`, authToken, {
@@ -296,6 +325,8 @@ describe("API Integration Tests", () => {
     expect(data.id).toBeDefined();
     expect(data.post_id).toBe(postId);
     expect(data.type).toBe("photo");
+    expect(data.url).toBeDefined();
+    expect(data.created_at).toBeDefined();
   });
 
   test("Add video media to a post", async () => {
@@ -779,6 +810,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data.reactions)).toBe(true);
+    if (data.reactions.length > 0) {
+      expect(data.reactions[0].emoji).toBeDefined();
+      expect(typeof data.reactions[0].count).toBe("number");
+      expect(typeof data.reactions[0].userReacted).toBe("boolean");
+    }
   });
 
   test("Add heart reaction to a post", async () => {
@@ -1084,6 +1120,8 @@ describe("API Integration Tests", () => {
     await expectStatus(joinRes, 200);
     const joinData = await joinRes.json();
     expect(joinData.id).toBe(family2Data.id);
+    expect(joinData.invite_code).toBeDefined();
+    expect(joinData.created_at).toBeDefined();
   });
 
   test("Join family with invalid invite code returns 404", async () => {
@@ -1132,6 +1170,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data.groups)).toBe(true);
+    // Verify structure if groups exist
+    if (data.groups.length > 0) {
+      expect(data.groups[0].year).toBeDefined();
+      expect(data.groups[0].month).toBeDefined();
+      expect(data.groups[0].month_name).toBeDefined();
+      expect(Array.isArray(data.groups[0].posts)).toBe(true);
+    }
   });
 
   test("Get timeline filtered by year", async () => {
@@ -1298,6 +1343,7 @@ describe("API Integration Tests", () => {
     expect(data.year).toBe(2026);
     expect(data.family_id).toBeDefined();
     expect(data.generated_at).toBeDefined();
+    expect(typeof data.content).toBe("object");
   });
 
   test("Generate newsletter with missing month returns 400", async () => {
@@ -1339,6 +1385,11 @@ describe("API Integration Tests", () => {
   test("Get latest newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/latest", authToken);
     await expectStatus(res, 200, 404);
+    // Only check structure if 200
+    if (res.status === 200) {
+      const data = await res.json();
+      expect(typeof data).toBe("object");
+    }
   });
 
   test("Generate newsletter without auth returns 401", async () => {

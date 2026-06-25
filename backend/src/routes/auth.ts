@@ -25,18 +25,18 @@ export function registerAuthRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      app.logger.info({}, 'Fetching JWT token from session');
+      app.logger.info({}, '[/api/auth/token] Fetching JWT token from session');
 
       try {
-        // First, check if Authorization header has a Bearer token
+        // Check for Bearer token first (it takes precedence for simplicity)
         const authHeader = request.headers.authorization;
         if (authHeader?.startsWith('Bearer ')) {
-          const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-          app.logger.info({}, 'Returning Bearer token from Authorization header');
-          return { token };
+          const bearerToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+          app.logger.info({}, '[/api/auth/token] Bearer token found, returning it');
+          return { token: bearerToken };
         }
 
-        // Try to get session from cookies
+        // Try cookie-based session
         const headers = new Headers();
         Object.entries(request.headers).forEach(([key, value]) => {
           if (value) {
@@ -47,39 +47,37 @@ export function registerAuthRoutes(app: App) {
         const session = await app.auth.api.getSession({ headers });
 
         if (!session) {
-          app.logger.warn({}, 'No valid session found for token request');
-          return reply.status(401).send({ error: 'Unauthorized' });
+          app.logger.warn({}, '[/api/auth/token] No valid session or Bearer token found');
+          return reply.status(401).send({ error: 'No valid session found' });
         }
 
-        app.logger.info({ userId: session.user.id }, 'Session found, generating JWT token');
+        app.logger.info({ userId: session.user.id }, '[/api/auth/token] Session found');
 
         // Try to get token using Better Auth API
         const tokenResult = await (app.auth.api as any).getToken({ headers });
 
-        if (!tokenResult?.token) {
-          app.logger.warn({}, 'getToken not available, trying alternative method');
-
-          // Fallback: try generateToken if available
-          if (typeof (app.auth as any).generateToken === 'function') {
-            const token = await (app.auth as any).generateToken({
-              userId: session.user.id,
-            });
-
-            if (token) {
-              app.logger.info({ userId: session.user.id }, 'JWT token generated successfully');
-              return { token };
-            }
-          }
-
-          app.logger.error({}, 'Failed to generate JWT token from session');
-          return reply.status(401).send({ error: 'Unauthorized' });
+        if (tokenResult?.token) {
+          app.logger.info({ userId: session.user.id }, '[/api/auth/token] JWT token retrieved successfully');
+          return { token: tokenResult.token };
         }
 
-        app.logger.info({ userId: session.user.id }, 'JWT token retrieved successfully');
-        return { token: tokenResult.token };
+        // Fallback: try generateToken if available
+        if (typeof (app.auth as any).generateToken === 'function') {
+          const token = await (app.auth as any).generateToken({
+            userId: session.user.id,
+          });
+
+          if (token) {
+            app.logger.info({ userId: session.user.id }, '[/api/auth/token] JWT token generated successfully');
+            return { token };
+          }
+        }
+
+        app.logger.error({}, '[/api/auth/token] Failed to generate JWT token from session');
+        return reply.status(401).send({ error: 'No valid session found' });
       } catch (error) {
-        app.logger.error({ err: error }, 'Error generating JWT token');
-        return reply.status(401).send({ error: 'Unauthorized' });
+        app.logger.error({ err: error }, '[/api/auth/token] Error processing token request');
+        return reply.status(401).send({ error: 'No valid session found' });
       }
     }
   );
