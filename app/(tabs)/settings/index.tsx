@@ -6,16 +6,21 @@ import {
   Animated,
   Alert,
   Share,
+  Platform,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
-import { Copy, Share2, LogOut, Users, ChevronRight, Check } from "lucide-react-native";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { format, parseISO } from "date-fns";
+import { de } from "date-fns/locale";
+import { Copy, Share2, LogOut, Users, ChevronRight, Check, Cake } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiGet } from "@/utils/api";
+import { apiGet, authenticatedPut } from "@/utils/api";
 import { SkeletonLine } from "@/components/SkeletonLine";
 
 interface FamilyMember {
@@ -30,6 +35,22 @@ interface Family {
   name: string;
   invite_code: string;
   members: FamilyMember[];
+}
+
+interface UserProfile {
+  birthday?: string | null;
+}
+
+function formatBirthdayDisplay(dateStr: string): string {
+  try {
+    return format(parseISO(dateStr), "dd. MMMM yyyy", { locale: de });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatBirthdayApi(date: Date): string {
+  return format(date, "yyyy-MM-dd");
 }
 
 function MemberAvatar({ member }: { member: FamilyMember }) {
@@ -75,17 +96,37 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  // Birthday state
+  const [birthday, setBirthday] = useState<string | null>(null);
+  const [showBirthdayPicker, setShowBirthdayPicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState<Date>(new Date(1990, 0, 1));
+  const [savingBirthday, setSavingBirthday] = useState(false);
+  const [birthdaySaved, setBirthdaySaved] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const loadFamily = useCallback(async () => {
-    console.log("[Settings] Loading family data");
+  const loadData = useCallback(async () => {
+    console.log("[Settings] Loading family and profile data");
     try {
-      const data = await apiGet<Family | Family[]>("/api/families");
-      const fam = Array.isArray(data) ? data[0] : data;
+      const [familyData, profileData] = await Promise.all([
+        apiGet<Family | Family[]>("/api/families"),
+        apiGet<UserProfile>("/api/profile").catch(() => null),
+      ]);
+      const fam = Array.isArray(familyData) ? familyData[0] : familyData;
       console.log("[Settings] Family loaded:", fam?.name);
       setFamily(fam || null);
+
+      if (profileData?.birthday) {
+        console.log("[Settings] Profile birthday loaded:", profileData.birthday);
+        setBirthday(profileData.birthday);
+        try {
+          setPickerDate(parseISO(profileData.birthday));
+        } catch {
+          // keep default
+        }
+      }
     } catch (err) {
-      console.error("[Settings] Load family error:", err);
+      console.error("[Settings] Load data error:", err);
     } finally {
       setLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -93,8 +134,8 @@ export default function SettingsScreen() {
   }, [fadeAnim]);
 
   useEffect(() => {
-    loadFamily();
-  }, [loadFamily]);
+    loadData();
+  }, [loadData]);
 
   const handleCopyCode = async () => {
     if (!family?.invite_code) return;
@@ -136,12 +177,72 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleBirthdayRowPress = () => {
+    console.log("[Settings] Birthday row pressed, opening picker");
+    setShowBirthdayPicker(true);
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowBirthdayPicker(false);
+      if (event.type === "set" && selectedDate) {
+        console.log("[Settings] Android birthday date selected:", formatBirthdayApi(selectedDate));
+        setPickerDate(selectedDate);
+        saveBirthday(selectedDate);
+      }
+    } else {
+      if (selectedDate) {
+        console.log("[Settings] iOS birthday date changed:", formatBirthdayApi(selectedDate));
+        setPickerDate(selectedDate);
+      }
+    }
+  };
+
+  const saveBirthday = async (date: Date) => {
+    const birthdayStr = formatBirthdayApi(date);
+    console.log("[Settings] PUT /api/profile/birthday with birthday:", birthdayStr);
+    try {
+      setSavingBirthday(true);
+      await authenticatedPut("/api/profile/birthday", { birthday: birthdayStr });
+      console.log("[Settings] Birthday saved successfully");
+      setBirthday(birthdayStr);
+      setBirthdaySaved(true);
+      setTimeout(() => setBirthdaySaved(false), 2000);
+    } catch (err) {
+      console.error("[Settings] Save birthday error:", err);
+      Alert.alert("Fehler", "Geburtstag konnte nicht gespeichert werden");
+    } finally {
+      setSavingBirthday(false);
+    }
+  };
+
+  const handleIOSPickerConfirm = () => {
+    console.log("[Settings] iOS birthday picker confirmed:", formatBirthdayApi(pickerDate));
+    setShowBirthdayPicker(false);
+    saveBirthday(pickerDate);
+  };
+
+  const handleIOSPickerCancel = () => {
+    console.log("[Settings] iOS birthday picker cancelled");
+    setShowBirthdayPicker(false);
+    // Reset picker to saved birthday
+    if (birthday) {
+      try {
+        setPickerDate(parseISO(birthday));
+      } catch {
+        // keep current
+      }
+    }
+  };
+
   const userInitials = (user?.name || user?.email || "?")
     .split(" ")
     .map((n: string) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const birthdayDisplayText = birthday ? formatBirthdayDisplay(birthday) : "Nicht angegeben";
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -171,7 +272,7 @@ export default function SettingsScreen() {
             <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.textTertiary, marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Profil
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 }}>
               {user?.image ? (
                 <Image
                   source={{ uri: user.image }}
@@ -203,6 +304,44 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: COLORS.divider, marginBottom: 14 }} />
+
+            {/* Birthday row */}
+            <AnimatedPressable
+              onPress={handleBirthdayRowPress}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {birthdaySaved
+                  ? <Check size={18} color={COLORS.accent} />
+                  : <Cake size={18} color={COLORS.primary} />
+                }
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.textSecondary }}>
+                  Geburtstag
+                </Text>
+                <Text style={{ fontSize: 15, color: birthdaySaved ? COLORS.accent : COLORS.text, fontWeight: "500", marginTop: 1 }}>
+                  {birthdaySaved ? "Gespeichert!" : birthdayDisplayText}
+                </Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.textTertiary} />
+            </AnimatedPressable>
           </View>
 
           {/* Family Card */}
@@ -397,6 +536,74 @@ export default function SettingsScreen() {
           </AnimatedPressable>
         </Animated.View>
       </ScrollView>
+
+      {/* Birthday Picker — iOS: modal with spinner + confirm/cancel */}
+      {Platform.OS === "ios" && (
+        <Modal
+          visible={showBirthdayPicker}
+          transparent
+          animationType="slide"
+          onRequestClose={handleIOSPickerCancel}
+        >
+          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.3)" }}>
+            <View
+              style={{
+                backgroundColor: COLORS.surface,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                paddingBottom: insets.bottom + 8,
+              }}
+            >
+              {/* Toolbar */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: COLORS.divider,
+                }}
+              >
+                <AnimatedPressable onPress={handleIOSPickerCancel}>
+                  <Text style={{ fontSize: 16, color: COLORS.textSecondary, fontWeight: "500" }}>
+                    Abbrechen
+                  </Text>
+                </AnimatedPressable>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.text }}>
+                  Geburtstag
+                </Text>
+                <AnimatedPressable onPress={handleIOSPickerConfirm} disabled={savingBirthday}>
+                  <Text style={{ fontSize: 16, color: COLORS.primary, fontWeight: "700" }}>
+                    {savingBirthday ? "..." : "Fertig"}
+                  </Text>
+                </AnimatedPressable>
+              </View>
+              <DateTimePicker
+                value={pickerDate}
+                mode="date"
+                display="spinner"
+                maximumDate={new Date()}
+                onChange={handleDateChange}
+                locale="de-DE"
+                style={{ width: "100%" }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Birthday Picker — Android: inline (shown conditionally) */}
+      {Platform.OS === "android" && showBirthdayPicker && (
+        <DateTimePicker
+          value={pickerDate}
+          mode="date"
+          display="default"
+          maximumDate={new Date()}
+          onChange={handleDateChange}
+        />
+      )}
     </View>
   );
 }
