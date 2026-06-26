@@ -452,7 +452,11 @@ export default function NewsletterScreen() {
       setGenerating(true);
       setError(null);
       console.log("[Newsletter] POST /api/newsletter/generate");
-      const data = await apiPost<Newsletter>("/api/newsletter/generate", { month: new Date().toISOString().slice(0, 7) });
+      const now = new Date();
+      const data = await apiPost<Newsletter>("/api/newsletter/generate", {
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+      });
       console.log("[Newsletter] Newsletter generated:", data?.id);
       setNewsletter(data);
     } catch (err: any) {
