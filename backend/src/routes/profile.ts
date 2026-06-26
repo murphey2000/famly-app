@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 import * as schema from '../db/schema/schema.js';
 
@@ -175,27 +175,24 @@ export function registerProfileRoutes(app: App) {
     '/api/newsletter/generate',
     {
       schema: {
-        description: 'Generate monthly newsletter',
+        description: 'Generate monthly newsletter with featured photos and member sections',
         tags: ['newsletter'],
         body: {
           type: 'object',
           required: ['month', 'year'],
           properties: {
-            month: { type: 'integer' },
-            year: { type: 'integer' },
+            month: { type: 'integer', minimum: 1, maximum: 12 },
+            year: { type: 'integer', minimum: 2000, maximum: 2099 },
           },
         },
         response: {
-          200: {
+          201: {
             type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              family_id: { type: 'string', format: 'uuid' },
-              month: { type: 'integer' },
-              year: { type: 'integer' },
-              content: { type: 'object' },
-              generated_at: { type: 'string', format: 'date-time' },
-            },
+            additionalProperties: true,
+          },
+          400: {
+            type: 'object',
+            properties: { error: { type: 'string' } },
           },
           401: { type: 'object', properties: { error: { type: 'string' } } },
           404: { type: 'object', properties: { error: { type: 'string' } } },
@@ -209,11 +206,11 @@ export function registerProfileRoutes(app: App) {
       const session = await requireAuth(request, reply);
       if (!session) return;
 
-      app.logger.info(
-        { userId: session.user.id, month: request.body.month, year: request.body.year },
-        'Generating newsletter'
-      );
+      const { month, year } = request.body;
 
+      app.logger.info({ userId: session.user.id, month, year }, 'Generating newsletter');
+
+      // Get family of authenticated user
       const familyMember = await app.db
         .select()
         .from(schema.family_members)
@@ -226,30 +223,179 @@ export function registerProfileRoutes(app: App) {
 
       const familyId = familyMember[0].family_id;
 
-      const posts = await app.db
+      // Get family name
+      const family = await app.db
+        .select()
+        .from(schema.families)
+        .where(eq(schema.families.id, familyId))
+        .limit(1);
+
+      if (!family.length) {
+        return reply.status(404).send({ error: 'Family not found' });
+      }
+
+      // Get posts for the month
+      const postsForMonth = await app.db
         .select()
         .from(schema.posts)
         .where(eq(schema.posts.family_id, familyId));
 
-      const filteredPosts = posts.filter((p) => {
-        if (!p.event_date) return false;
-        const date = new Date(p.event_date);
-        return date.getMonth() + 1 === request.body.month && date.getFullYear() === request.body.year;
+      // Filter posts by month/year in memory
+      const filteredPosts = postsForMonth.filter(p => {
+        const d = new Date(p.created_at);
+        return d.getFullYear() === year && (d.getMonth() + 1) === month;
       });
 
-      const mediaCount = await app.db.select().from(schema.media).where(eq(schema.media.family_id, familyId));
+      app.logger.info({ familyId, month, year, postCount: filteredPosts.length }, 'Fetched posts for month');
 
-      const activeMembersSet = new Set<string>();
-      for (const post of filteredPosts) {
-        activeMembersSet.add(post.author_id);
+      // Feature 1: Featured photos
+      let featuredPhotos: Array<{ url: string; post_title: string; author_name: string }> = [];
+      if (filteredPosts.length > 0) {
+        const media = await app.db
+          .select()
+          .from(schema.media)
+          .where(
+            and(
+              eq(schema.media.family_id, familyId),
+              eq(schema.media.type, 'photo')
+            )
+          );
+
+        // Filter media by month/year
+        const monthMedia = media.filter(m => {
+          const d = new Date(m.created_at);
+          return d.getFullYear() === year && (d.getMonth() + 1) === month;
+        }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
+
+        if (monthMedia.length > 0) {
+          // Join with posts and users
+          const postIds = monthMedia.map(m => m.post_id);
+          const posts = await app.db
+            .select()
+            .from(schema.posts)
+            .where(inArray(schema.posts.id, postIds));
+
+          const authorIds = posts.map(p => p.author_id);
+          const users = authorIds.length > 0
+            ? await app.db
+                .select()
+                .from(authSchema.user)
+                .where(inArray(authSchema.user.id, authorIds))
+            : [];
+
+          const postMap = new Map(posts.map(p => [p.id, p]));
+          const userMap = new Map(users.map(u => [u.id, u]));
+
+          const photoList = monthMedia.map(m => {
+            const post = postMap.get(m.post_id);
+            const author = userMap.get(post?.author_id);
+            return {
+              url: m.url,
+              post_title: post?.ai_title || post?.raw_text || 'Untitled',
+              author_name: author?.name || 'Unknown',
+            };
+          });
+
+          // If more than 3 photos, use AI to pick top 3
+          if (photoList.length > 3) {
+            app.logger.info({ familyId, photoCount: photoList.length }, 'Selecting top 3 photos with AI');
+            try {
+              if (!process.env.OPENROUTER_API_KEY) {
+                app.logger.warn({}, 'OPENROUTER_API_KEY not configured, using first 3 photos');
+                featuredPhotos = photoList.slice(0, 3);
+              } else {
+                const photoListStr = photoList.map((p, i) => `${i}: "${p.post_title}" by ${p.author_name}`).join('\n');
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    model: 'openai/gpt-4o-mini',
+                    messages: [
+                      {
+                        role: 'user',
+                        content: `You have a list of ${photoList.length} photos. Return the indices of the 3 most visually interesting ones. Reply with only a JSON object: {"indices": [i, j, k]}.\n\nPhotos:\n${photoListStr}`,
+                      },
+                    ],
+                  }),
+                });
+
+                if (response.ok) {
+                  const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+                  const content = data.choices[0].message.content;
+                  const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+                  const parsed = JSON.parse(cleaned) as { indices: number[] };
+                  const selectedIndices = parsed.indices.filter(i => i >= 0 && i < photoList.length).slice(0, 3);
+                  featuredPhotos = selectedIndices.map(i => photoList[i]);
+                  app.logger.info({ indices: selectedIndices }, 'Selected photos with AI');
+                } else {
+                  app.logger.warn({ status: response.status }, 'AI photo selection failed, using first 3');
+                  featuredPhotos = photoList.slice(0, 3);
+                }
+              }
+            } catch (error) {
+              app.logger.warn({ err: error }, 'Error selecting photos with AI, using first 3');
+              featuredPhotos = photoList.slice(0, 3);
+            }
+          } else {
+            featuredPhotos = photoList;
+          }
+        }
       }
 
-      const summaryText = filteredPosts.map((p) => p.ai_story || p.raw_text).join('\n');
+      // Feature 2: Member sections
+      const memberSections: Array<{ user_id: string; name: string; avatar_url: string | null; text: string }> = [];
+      const postsByAuthor = new Map<string, typeof filteredPosts>();
+      for (const post of filteredPosts) {
+        if (!postsByAuthor.has(post.author_id)) {
+          postsByAuthor.set(post.author_id, []);
+        }
+        postsByAuthor.get(post.author_id)!.push(post);
+      }
 
-      let parsed: any = null;
+      const authorIds = Array.from(postsByAuthor.keys());
+      const authors = authorIds.length > 0
+        ? await app.db
+            .select()
+            .from(authSchema.user)
+            .where(inArray(authSchema.user.id, authorIds))
+        : [];
 
-      if (process.env.OPENROUTER_API_KEY) {
+      const authorMap = new Map(authors.map(a => [a.id, a]));
+
+      // Generate member sections in parallel
+      const memberPromises = authorIds.map(async (authorId) => {
+        const author = authorMap.get(authorId);
+        if (!author) return null;
+
+        const authorPosts = postsByAuthor.get(authorId) || [];
+        const postsSummary = authorPosts
+          .map(p => p.ai_story || p.raw_text || '')
+          .filter(Boolean)
+          .join(' ');
+
+        if (!postsSummary.trim()) {
+          return {
+            user_id: authorId,
+            name: author.name,
+            avatar_url: author.image || null,
+            text: '',
+          };
+        }
+
         try {
+          if (!process.env.OPENROUTER_API_KEY) {
+            app.logger.warn({}, 'OPENROUTER_API_KEY not configured for member sections');
+            return {
+              user_id: authorId,
+              name: author.name,
+              avatar_url: author.image || null,
+              text: 'Ein Monat voller schöner Momente.',
+            };
+          }
+
           const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -257,89 +403,140 @@ export function registerProfileRoutes(app: App) {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'google/gemini-flash-1.5',
+              model: 'openai/gpt-4o-mini',
               messages: [
                 {
                   role: 'user',
-                  content: `Generate a family newsletter for ${request.body.month}/${request.body.year}. Posts summary: ${summaryText}.
-
-Respond in JSON with this exact structure:
-{
-  "headline": "Familie [Name] – [Month] [Year]",
-  "sections": [
-    { "icon": "🎂", "title": "Geburtstage", "items": ["..."] },
-    { "icon": "✈️", "title": "Reisen", "items": ["..."] },
-    { "icon": "📚", "title": "Schule & Arbeit", "items": ["..."] },
-    { "icon": "📸", "title": "Besondere Momente", "items": ["..."] }
-  ],
-  "stats": { "posts": ${filteredPosts.length}, "photos": ${mediaCount.length}, "members_active": ${activeMembersSet.size} },
-  "closing": "Ein wunderschöner Monat voller Erinnerungen."
-}`,
+                  content: `Du schreibst für eine Familien-Zeitung. Schreibe 1-2 warme, persönliche Sätze auf Deutsch über ${author.name}s Monat, basierend auf diesen Beiträgen: ${postsSummary}. Sei herzlich und familiär.`,
                 },
               ],
             }),
           });
 
-          if (!response.ok) {
-            throw new Error(`OpenRouter API error: ${response.status}`);
+          if (response.ok) {
+            const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+            const text = data.choices[0].message.content.trim();
+            app.logger.info({ authorId, textLen: text.length }, 'Generated member section');
+            return {
+              user_id: authorId,
+              name: author.name,
+              avatar_url: author.image || null,
+              text,
+            };
+          } else {
+            app.logger.warn({ status: response.status, authorId }, 'Member section AI generation failed');
+            return {
+              user_id: authorId,
+              name: author.name,
+              avatar_url: author.image || null,
+              text: `${author.name} hat schöne Momente geteilt.`,
+            };
           }
-
-          const data = await response.json() as { choices: Array<{ message: { content: string } }> };
-          const content = data.choices[0].message.content;
-          parsed = JSON.parse(content);
         } catch (error) {
-          app.logger.error({ err: error }, 'Failed to call OpenRouter API, using fallback newsletter');
+          app.logger.warn({ err: error, authorId }, 'Error generating member section');
+          return {
+            user_id: authorId,
+            name: author.name,
+            avatar_url: author.image || null,
+            text: `${author.name} hat schöne Momente geteilt.`,
+          };
         }
-      } else {
-        app.logger.warn('OPENROUTER_API_KEY not set, using fallback newsletter');
-      }
+      });
 
-      if (!parsed) {
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        parsed = {
-          headline: `Family Newsletter – ${monthNames[request.body.month - 1]} ${request.body.year}`,
-          sections: [
-            { icon: '🎂', title: 'Special Moments', items: filteredPosts.map((p) => p.ai_title || p.raw_text || 'Untitled').slice(0, 5) },
-          ],
-          stats: { posts: filteredPosts.length, photos: mediaCount.length, members_active: activeMembersSet.size },
-          closing: 'A wonderful month full of memories.',
-        };
-      }
+      const memberResults = await Promise.all(memberPromises);
+      memberSections.push(...memberResults.filter(Boolean) as typeof memberSections);
 
-      const existingNewsletter = await app.db
+      app.logger.info({ familyId, memberCount: memberSections.length }, 'Generated member sections');
+
+      // Count active members and photos
+      const uniqueAuthors = new Set(filteredPosts.map(p => p.author_id));
+      const photosCount = await app.db
+        .select()
+        .from(schema.media)
+        .where(
+          and(
+            eq(schema.media.family_id, familyId),
+            eq(schema.media.type, 'photo')
+          )
+        );
+
+      const monthPhotoCount = photosCount.filter(m => {
+        const d = new Date(m.created_at);
+        return d.getFullYear() === year && (d.getMonth() + 1) === month;
+      }).length;
+
+      // Build newsletter content
+      const monthName = new Date(year, month - 1).toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+      const headline = `Newsletter ${monthName}`;
+
+      const content = {
+        headline,
+        sections: [
+          {
+            icon: '📸',
+            title: 'Highlights',
+            items: [`${filteredPosts.length} Beiträge geteilt`],
+          },
+        ],
+        stats: {
+          posts: filteredPosts.length,
+          photos: monthPhotoCount,
+          members_active: uniqueAuthors.size,
+        },
+        closing: 'Vielen Dank, dass ihr Teil dieser Familie seid!',
+        featured_photos: featuredPhotos,
+        member_sections: memberSections,
+      };
+
+      // Check if newsletter already exists
+      const existing = await app.db
         .select()
         .from(schema.newsletters)
         .where(
-          eq(schema.newsletters.family_id, familyId)
-        );
+          and(
+            eq(schema.newsletters.family_id, familyId),
+            eq(schema.newsletters.month, month),
+            eq(schema.newsletters.year, year)
+          )
+        )
+        .limit(1);
 
-      const existing = existingNewsletter.find(
-        (n) => n.month === request.body.month && n.year === request.body.year
-      );
-
-      if (existing) {
+      let newsletter;
+      if (existing.length > 0) {
+        app.logger.info({ newsletterId: existing[0].id }, 'Updating existing newsletter');
         const updated = await app.db
           .update(schema.newsletters)
-          .set({ content: parsed as any })
-          .where(eq(schema.newsletters.id, existing.id))
+          .set({
+            content: content as any,
+            generated_at: new Date(),
+          })
+          .where(eq(schema.newsletters.id, existing[0].id))
           .returning();
-
-        app.logger.info({ newsletterId: updated[0].id }, 'Newsletter updated');
-        return updated[0];
+        newsletter = updated[0];
       } else {
+        app.logger.info({ familyId, month, year }, 'Creating new newsletter');
         const created = await app.db
           .insert(schema.newsletters)
           .values({
             family_id: familyId,
-            month: request.body.month,
-            year: request.body.year,
-            content: parsed as any,
+            month,
+            year,
+            content: content as any,
           })
           .returning();
-
-        app.logger.info({ newsletterId: created[0].id }, 'Newsletter generated');
-        return created[0];
+        newsletter = created[0];
       }
+
+      app.logger.info({ newsletterId: newsletter.id }, 'Newsletter generated successfully');
+
+      return reply.status(201).send({
+        id: newsletter.id,
+        month,
+        year,
+        family_id: familyId,
+        content,
+        generated_at: newsletter.generated_at,
+      });
     }
   );
 
@@ -352,6 +549,7 @@ Respond in JSON with this exact structure:
         response: {
           200: {
             type: 'object',
+            additionalProperties: true,
           },
           401: { type: 'object', properties: { error: { type: 'string' } } },
           404: { type: 'object', properties: { error: { type: 'string' } } },
@@ -374,19 +572,116 @@ Respond in JSON with this exact structure:
         return reply.status(404).send({ error: 'No family found' });
       }
 
+      const familyId = familyMember[0].family_id;
+
+      const family = await app.db
+        .select()
+        .from(schema.families)
+        .where(eq(schema.families.id, familyId))
+        .limit(1);
+
+      if (!family.length) {
+        return reply.status(404).send({ error: 'Family not found' });
+      }
+
+      const newsletter = await app.db
+        .select()
+        .from(schema.newsletters)
+        .where(eq(schema.newsletters.family_id, familyId))
+        .orderBy(desc(schema.newsletters.year), desc(schema.newsletters.month))
+        .limit(1);
+
+      if (!newsletter.length) {
+        return reply.status(404).send({ error: 'No newsletters found' });
+      }
+
+      const nl = newsletter[0];
+      const monthName = new Date(nl.year, nl.month - 1).toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+
+      app.logger.info({ newsletterId: nl.id }, 'Latest newsletter fetched');
+
+      return {
+        id: nl.id,
+        month: monthName,
+        family_name: family[0].name,
+        headline: nl.content?.headline || '',
+        sections: nl.content?.sections || [],
+        member_sections: nl.content?.member_sections || [],
+        featured_photos: nl.content?.featured_photos || [],
+        stats: nl.content?.stats || { posts: 0, photos: 0, members_active: 0 },
+        closing: nl.content?.closing || '',
+        created_at: nl.generated_at,
+      };
+    }
+  );
+
+  app.fastify.get(
+    '/api/newsletter/archive',
+    {
+      schema: {
+        description: 'Get all newsletters for user family',
+        tags: ['newsletter'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              newsletters: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    month: { type: 'integer' },
+                    year: { type: 'integer' },
+                    headline: { type: 'string' },
+                    generated_at: { type: 'string', format: 'date-time' },
+                    cover_photo: { type: ['string', 'null'] },
+                  },
+                },
+              },
+            },
+          },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({ userId: session.user.id }, 'Fetching newsletter archive');
+
+      const familyMember = await app.db
+        .select()
+        .from(schema.family_members)
+        .where(eq(schema.family_members.user_id, session.user.id))
+        .limit(1);
+
+      if (!familyMember.length) {
+        return reply.status(404).send({ error: 'No family found' });
+      }
+
+      const familyId = familyMember[0].family_id;
+
       const newsletters = await app.db
         .select()
         .from(schema.newsletters)
-        .where(eq(schema.newsletters.family_id, familyMember[0].family_id))
-        .orderBy((t) => [t.year, t.month]);
+        .where(eq(schema.newsletters.family_id, familyId))
+        .orderBy(desc(schema.newsletters.year), desc(schema.newsletters.month));
 
-      if (!newsletters.length) {
-        return {};
-      }
+      app.logger.info({ familyId, count: newsletters.length }, 'Newsletter archive fetched');
 
-      app.logger.info({ newsletterId: newsletters[newsletters.length - 1].id }, 'Latest newsletter retrieved');
-
-      return newsletters[newsletters.length - 1];
+      return {
+        newsletters: newsletters.map(nl => ({
+          id: nl.id,
+          month: nl.month,
+          year: nl.year,
+          headline: nl.content?.headline || '',
+          generated_at: nl.generated_at,
+          cover_photo: nl.content?.featured_photos?.[0]?.url || null,
+        })),
+      };
     }
   );
 

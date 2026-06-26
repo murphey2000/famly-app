@@ -82,6 +82,8 @@ export const newsletters = pgTable('newsletters', {
     sections: Array<{ icon: string; title: string; items: string[] }>;
     stats: { posts: number; photos: number; members_active: number };
     closing: string;
+    featured_photos?: Array<{ url: string; post_title: string; author_name: string }>;
+    member_sections?: Array<{ user_id: string; name: string; avatar_url: string | null; text: string }>;
   }>(),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
