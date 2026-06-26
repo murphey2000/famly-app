@@ -1336,7 +1336,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ month: 6, year: 2026 }),
     });
-    await expectStatus(res, 200);
+    await expectStatus(res, 201);
     const data = await res.json();
     expect(data.id).toBeDefined();
     expect(data.month).toBe(6);
@@ -1370,7 +1370,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ month: 13, year: 2026 }),
     });
-    await expectStatus(res, 400, 200);
+    await expectStatus(res, 400);
   });
 
   test("Generate newsletter with invalid month (0) returns 400", async () => {
@@ -1379,7 +1379,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ month: 0, year: 2026 }),
     });
-    await expectStatus(res, 400, 200);
+    await expectStatus(res, 400);
   });
 
   test("Get latest newsletter", async () => {
@@ -1390,6 +1390,26 @@ describe("API Integration Tests", () => {
       const data = await res.json();
       expect(typeof data).toBe("object");
     }
+  });
+
+  test("Get newsletter archive", async () => {
+    const res = await authenticatedApi("/api/newsletter/archive", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.newsletters)).toBe(true);
+    // Verify structure if newsletters exist
+    if (data.newsletters.length > 0) {
+      expect(data.newsletters[0].id).toBeDefined();
+      expect(typeof data.newsletters[0].month).toBe("number");
+      expect(typeof data.newsletters[0].year).toBe("number");
+      expect(data.newsletters[0].headline).toBeDefined();
+      expect(data.newsletters[0].generated_at).toBeDefined();
+    }
+  });
+
+  test("Get newsletter archive without auth returns 401", async () => {
+    const res = await api("/api/newsletter/archive");
+    await expectStatus(res, 401);
   });
 
   test("Generate newsletter without auth returns 401", async () => {
