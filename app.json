@@ -15,7 +15,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.placeholder.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Famly benötigt Zugriff auf deine Fotos, um Erinnerungen zu teilen.",
+        "NSCameraUsageDescription": "Famly benötigt Zugriff auf deine Kamera, um Fotos und QR-Codes aufzunehmen."
       }
     },
     "android": {
@@ -23,7 +25,11 @@
         "foregroundImage": "./assets/images/app-icon-lnl.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.placeholder.app"
+      "package": "com.placeholder.app",
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/images/newly.png",
