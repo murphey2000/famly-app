@@ -796,8 +796,8 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
           return reply.status(500).send({ error: 'AI generation failed' });
         }
 
-        const systemPrompt = 'Du bist ein einfühlsamer Familienchronist. Schreibe warmherzige, persönliche Texte auf Deutsch.';
-        const userMessage = `Schreibe einen kurzen Titel (max. 8 Wörter) und eine warmherzige Geschichte (2-4 Sätze) basierend auf diesem Familienbeitrag: ${post[0].raw_text}\n\nAntworte ausschließlich als JSON-Objekt in diesem Format: {"title": "...", "story": "..."}`;
+        const systemPrompt = 'Du bist ein Assistent der Familienerinnerungen formuliert. Deine Aufgabe: Formuliere den eingegebenen Text als kurzen, persönlichen Satz oder zwei – maximal dreimal so lang wie die Eingabe. Keine Ausschmückungen, kein Auffüllen. Schreib so, als würde ein Familienmitglied die Erinnerung erzählen – warm, direkt, echt. Behalte alle persönlichen Details bei. Antworte immer in der Sprache der Eingabe.';
+        const userMessage = `Eingabe: "${post[0].raw_text}"\n\nErstelle:\n1. Einen kurzen Titel (max. 6 Wörter)\n2. Einen kurzen, persönlichen Text (max. 3 Sätze, nicht länger als das Dreifache der Eingabe)\n\nAntworte als JSON: {"title": "...", "story": "..."}`;
 
         app.logger.info({ postId: request.params.id }, 'Calling OpenRouter API for AI generation');
 
