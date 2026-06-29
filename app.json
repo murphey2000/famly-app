@@ -13,11 +13,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "io.famlyto.moments",
+      "bundleIdentifier": "com.famly.familymemories",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "Famly ben\u00f6tigt Zugriff auf deine Fotos, um Erinnerungen zu teilen.",
-        "NSCameraUsageDescription": "Famly ben\u00f6tigt Zugriff auf deine Kamera, um Fotos und QR-Codes aufzunehmen."
+        "NSPhotoLibraryUsageDescription": "Famly benötigt Zugriff auf deine Fotos, um Erinnerungen zu teilen.",
+        "NSCameraUsageDescription": "Famly benötigt Zugriff auf deine Kamera, um Fotos und QR-Codes aufzunehmen."
       }
     },
     "android": {
