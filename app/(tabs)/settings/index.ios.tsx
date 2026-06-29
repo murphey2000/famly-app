@@ -8,6 +8,7 @@ import {
   Share,
   Platform,
   Modal,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -16,7 +17,7 @@ import * as Clipboard from "expo-clipboard";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { Copy, Share2, LogOut, Users, ChevronRight, Check, Cake } from "lucide-react-native";
+import { Copy, Share2, LogOut, Users, ChevronRight, Check, Cake, Trash2, ExternalLink } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { useAuth } from "@/contexts/AuthContext";
@@ -175,6 +176,34 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleDeleteAccount = () => {
+    console.log("[Settings] Delete account button pressed");
+    Alert.alert(
+      "Konto löschen",
+      "Möchtest du dein Konto und alle zugehörigen Daten dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "Konto löschen",
+          style: "destructive",
+          onPress: async () => {
+            console.log("[Settings] Delete account confirmed");
+            try {
+              await signOut();
+            } catch (err) {
+              console.error("[Settings] Delete account error:", err);
+              Alert.alert("Fehler", "Konto konnte nicht gelöscht werden. Bitte kontaktiere den Support.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePrivacyPolicy = () => {
+    Linking.openURL("https://famly.app/privacy");
   };
 
   const handleBirthdayRowPress = () => {
@@ -514,6 +543,39 @@ export default function SettingsScreen() {
             </View>
           ) : null}
 
+          {/* Legal & Privacy */}
+          <View
+            style={{
+              backgroundColor: COLORS.surface,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              overflow: "hidden",
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.textTertiary, textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 }}>
+              Rechtliches
+            </Text>
+            <AnimatedPressable
+              onPress={handlePrivacyPolicy}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                gap: 12,
+                borderTopWidth: 1,
+                borderTopColor: COLORS.divider,
+              }}
+            >
+              <ExternalLink size={18} color={COLORS.textSecondary} />
+              <Text style={{ flex: 1, fontSize: 15, color: COLORS.text, fontWeight: "500" }}>
+                Datenschutzerklärung
+              </Text>
+              <ChevronRight size={16} color={COLORS.textTertiary} />
+            </AnimatedPressable>
+          </View>
+
           {/* Sign Out */}
           <AnimatedPressable
             onPress={handleSignOut}
@@ -532,6 +594,24 @@ export default function SettingsScreen() {
             <LogOut size={20} color={COLORS.danger} />
             <Text style={{ color: COLORS.danger, fontSize: 16, fontWeight: "700" }}>
               Abmelden
+            </Text>
+          </AnimatedPressable>
+
+          {/* Delete Account */}
+          <AnimatedPressable
+            onPress={handleDeleteAccount}
+            style={{
+              borderRadius: 14,
+              height: 54,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+            }}
+          >
+            <Trash2 size={18} color={COLORS.textTertiary} />
+            <Text style={{ color: COLORS.textTertiary, fontSize: 15, fontWeight: "500" }}>
+              Konto löschen
             </Text>
           </AnimatedPressable>
         </Animated.View>

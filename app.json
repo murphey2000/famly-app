@@ -17,7 +17,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Famly benötigt Zugriff auf deine Fotos, um Erinnerungen zu teilen.",
-        "NSCameraUsageDescription": "Famly benötigt Zugriff auf deine Kamera, um Fotos und QR-Codes aufzunehmen."
+        "NSCameraUsageDescription": "Famly benötigt Zugriff auf deine Kamera, um Fotos und QR-Codes aufzunehmen.",
+        "NSUserNotificationUsageDescription": "Famly sendet dir Benachrichtigungen über neue Erinnerungen und Familienaktivitäten."
       }
     },
     "android": {
