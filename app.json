@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.famly.familymemories",
+      "bundleIdentifier": "io.famlyto.moments",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Famly ben\u00f6tigt Zugriff auf deine Fotos, um Erinnerungen zu teilen.",
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/images/app-icon-lnl.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.famly.familymemories",
+      "package": "io.famlyto.moments",
       "permissions": [
         "READ_MEDIA_IMAGES",
         "android.permission.CAMERA"
