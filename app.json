@@ -16,9 +16,9 @@
       "bundleIdentifier": "com.famly.familymemories",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "Famly benötigt Zugriff auf deine Fotos, um Erinnerungen zu teilen.",
-        "NSCameraUsageDescription": "Famly benötigt Zugriff auf deine Kamera, um Fotos und QR-Codes aufzunehmen.",
-        "NSUserNotificationUsageDescription": "Famly sendet dir Benachrichtigungen über neue Erinnerungen und Familienaktivitäten."
+        "NSPhotoLibraryUsageDescription": "Famly ben\u00f6tigt Zugriff auf deine Fotos, um Erinnerungen zu teilen.",
+        "NSCameraUsageDescription": "Famly ben\u00f6tigt Zugriff auf deine Kamera, um Fotos und QR-Codes aufzunehmen.",
+        "NSUserNotificationUsageDescription": "Famly sendet dir Benachrichtigungen \u00fcber neue Erinnerungen und Familienaktivit\u00e4ten."
       }
     },
     "android": {

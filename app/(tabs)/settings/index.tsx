@@ -21,7 +21,7 @@ import { Copy, Share2, LogOut, Users, ChevronRight, Check, Cake, Trash2, Externa
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiGet, authenticatedPut } from "@/utils/api";
+import { apiGet, authenticatedPut, authenticatedDelete } from "@/utils/api";
 import { SkeletonLine } from "@/components/SkeletonLine";
 
 interface FamilyMember {
@@ -191,6 +191,8 @@ export default function SettingsScreen() {
           onPress: async () => {
             console.log("[Settings] Delete account confirmed");
             try {
+              await authenticatedDelete("/api/profile");
+              console.log("[Settings] Account deleted successfully");
               await signOut();
             } catch (err) {
               console.error("[Settings] Delete account error:", err);
