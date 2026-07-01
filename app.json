@@ -4,7 +4,7 @@
     "slug": "famly",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/newly.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/newly.png",
