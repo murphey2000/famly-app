@@ -1329,6 +1329,35 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Set user birthday with PUT", async () => {
+    const res = await authenticatedApi("/api/profile/birthday", authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ birthday: "1992-03-20" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Set birthday with missing birthday via PUT returns 400", async () => {
+    const res = await authenticatedApi("/api/profile/birthday", authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Set birthday without auth via PUT returns 401", async () => {
+    const res = await api("/api/profile/birthday", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ birthday: "1992-03-20" }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // Newsletter
   test("Generate newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/generate", authToken, {
@@ -1382,6 +1411,24 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Generate newsletter with invalid year (1999) returns 400", async () => {
+    const res = await authenticatedApi("/api/newsletter/generate", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: 6, year: 1999 }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Generate newsletter with invalid year (2100) returns 400", async () => {
+    const res = await authenticatedApi("/api/newsletter/generate", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: 6, year: 2100 }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Get latest newsletter", async () => {
     const res = await authenticatedApi("/api/newsletter/latest", authToken);
     await expectStatus(res, 200, 404);
@@ -1390,6 +1437,11 @@ describe("API Integration Tests", () => {
       const data = await res.json();
       expect(typeof data).toBe("object");
     }
+  });
+
+  test("Get latest newsletter without auth returns 401", async () => {
+    const res = await api("/api/newsletter/latest");
+    await expectStatus(res, 401);
   });
 
   test("Get newsletter archive", async () => {
@@ -1418,11 +1470,6 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ month: 6, year: 2026 }),
     });
-    await expectStatus(res, 401);
-  });
-
-  test("Get latest newsletter without auth returns 401", async () => {
-    const res = await api("/api/newsletter/latest");
     await expectStatus(res, 401);
   });
 
