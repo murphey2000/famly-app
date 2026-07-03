@@ -4,7 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
-const API_URL = "https://2gpjz4y4vbbyzy5b237skxwkqwsqua78.app.specular.dev";
+const API_URL = "https://3p4kr7aazdujztbfzrrgyems8qmgy6sx.app.specular.dev";
 
 export const BEARER_TOKEN_KEY = "famly_bearer_token";
 
