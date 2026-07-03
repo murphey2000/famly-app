@@ -685,6 +685,60 @@ export function registerProfileRoutes(app: App) {
     }
   );
 
+
+  app.fastify.delete(
+    '/api/profile',
+    {
+      schema: {
+        description: 'Delete current user account and all associated data',
+        tags: ['profile'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+            },
+          },
+          401: {
+            type: 'object',
+            properties: { error: { type: 'string' } },
+          },
+          404: {
+            type: 'object',
+            properties: { error: { type: 'string' } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      const userId = session.user.id;
+      app.logger.info({ userId }, 'Deleting user account');
+
+      const existing = await app.db
+        .select()
+        .from(authSchema.user)
+        .where(eq(authSchema.user.id, userId))
+        .limit(1);
+
+      if (!existing.length) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Deleting the user cascades to: sessions, accounts, family_members,
+      // posts, media, post_reactions, and newsletters (all have onDelete: cascade)
+      await app.db
+        .delete(authSchema.user)
+        .where(eq(authSchema.user.id, userId));
+
+      app.logger.info({ userId }, 'User account deleted successfully');
+
+      return { success: true };
+    }
+  );
+
   app.fastify.patch(
     '/api/profile/birthday',
     {
