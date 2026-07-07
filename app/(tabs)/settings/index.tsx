@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DatePicker from "@/components/DatePicker";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { Copy, Share2, LogOut, Users, ChevronRight, Check, Cake, Trash2, ExternalLink } from "lucide-react-native";
@@ -213,20 +213,9 @@ export default function SettingsScreen() {
     setShowBirthdayPicker(true);
   };
 
-  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowBirthdayPicker(false);
-      if (event.type === "set" && selectedDate) {
-        console.log("[Settings] Android birthday date selected:", formatBirthdayApi(selectedDate));
-        setPickerDate(selectedDate);
-        saveBirthday(selectedDate);
-      }
-    } else {
-      if (selectedDate) {
-        console.log("[Settings] iOS birthday date changed:", formatBirthdayApi(selectedDate));
-        setPickerDate(selectedDate);
-      }
-    }
+  const handleDateChange = (date: Date) => {
+    console.log("[Settings] iOS birthday date changed:", formatBirthdayApi(date));
+    setPickerDate(date);
   };
 
   const saveBirthday = async (date: Date) => {
@@ -662,12 +651,11 @@ export default function SettingsScreen() {
                   </Text>
                 </AnimatedPressable>
               </View>
-              <DateTimePicker
+              <DatePicker
                 value={pickerDate}
-                mode="date"
-                display="spinner"
-                maximumDate={new Date()}
                 onChange={handleDateChange}
+                maximumDate={new Date()}
+                display="spinner"
                 locale="de-DE"
                 style={{ width: "100%" }}
               />
@@ -676,14 +664,18 @@ export default function SettingsScreen() {
         </Modal>
       )}
 
-      {/* Birthday Picker — Android: inline (shown conditionally) */}
-      {Platform.OS === "android" && showBirthdayPicker && (
-        <DateTimePicker
+      {/* Birthday Picker — Android/Web: inline (shown conditionally) */}
+      {Platform.OS !== "ios" && showBirthdayPicker && (
+        <DatePicker
           value={pickerDate}
-          mode="date"
-          display="default"
+          onChange={(d) => {
+            console.log("[Settings] Android/web birthday date selected:", formatBirthdayApi(d));
+            setPickerDate(d);
+            saveBirthday(d);
+            setShowBirthdayPicker(false);
+          }}
           maximumDate={new Date()}
-          onChange={handleDateChange}
+          display="default"
         />
       )}
     </View>

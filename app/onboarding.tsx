@@ -13,7 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DatePicker from "@/components/DatePicker";
 import { Users, Plus, Hash, QrCode, X, Cake, ChevronRight } from "lucide-react-native";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -167,14 +167,9 @@ export default function OnboardingScreen() {
     router.replace("/(tabs)/(home)");
   };
 
-  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowAndroidPicker(false);
-    }
-    if (event.type === "set" && selectedDate) {
-      console.log("[Onboarding] Birthday date changed:", formatBirthdayApi(selectedDate));
-      setBirthday(selectedDate);
-    }
+  const handleDateChange = (date: Date) => {
+    console.log("[Onboarding] Birthday date changed:", formatBirthdayApi(date));
+    setBirthday(date);
   };
 
   const birthdayDisplayText = formatBirthdayDisplay(birthday);
@@ -277,22 +272,20 @@ export default function OnboardingScreen() {
                       <ChevronRight size={18} color={COLORS.textSecondary} />
                     </AnimatedPressable>
                     {showAndroidPicker && (
-                      <DateTimePicker
+                      <DatePicker
                         value={birthday}
-                        mode="date"
-                        display="default"
+                        onChange={(d) => { setShowAndroidPicker(false); handleDateChange(d); }}
                         maximumDate={new Date()}
-                        onChange={handleDateChange}
+                        display="default"
                       />
                     )}
                   </>
                 ) : (
-                  <DateTimePicker
+                  <DatePicker
                     value={birthday}
-                    mode="date"
-                    display="spinner"
-                    maximumDate={new Date()}
                     onChange={handleDateChange}
+                    maximumDate={new Date()}
+                    display="spinner"
                     locale="de-DE"
                     style={{ width: "100%" }}
                   />
