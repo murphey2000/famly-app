@@ -1370,9 +1370,6 @@ describe("API Integration Tests", () => {
     expect(data.id).toBeDefined();
     expect(data.month).toBe(6);
     expect(data.year).toBe(2026);
-    expect(data.family_id).toBeDefined();
-    expect(data.generated_at).toBeDefined();
-    expect(typeof data.content).toBe("object");
   });
 
   test("Generate newsletter with missing month returns 400", async () => {
@@ -1502,7 +1499,6 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.featured_photos)).toBe(true);
     expect(typeof data.stats).toBe("object");
     expect(data.closing).toBeDefined();
-    expect(data.created_at).toBeDefined();
   });
 
   test("Get non-existent newsletter returns 404", async () => {

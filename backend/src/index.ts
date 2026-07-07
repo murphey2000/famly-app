@@ -1,4 +1,5 @@
 import { createApplication } from "@specific-dev/framework";
+import { jwt } from "better-auth/plugins";
 import * as appSchema from './db/schema/schema.js';
 import * as authSchema from './db/schema/auth-schema.js';
 import { registerFamiliesRoutes } from './routes/families.js';
@@ -20,6 +21,9 @@ app.withAuth({
     process.env.APP_URL || 'https://vqprhrdr6pemce78dksqkeqpdfka3x56.app.specular.dev',
     "https://2b74c067-e8de-4846-ada9-033ab988fdfb.newly.dev",
     "famly://",
+  ],
+  plugins: [
+    jwt(),
   ],
 });
 app.withStorage();
