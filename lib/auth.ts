@@ -33,7 +33,23 @@ export const authClient = createAuthClient({
     // via JWKS — `session.data.session.token` is the session ID, not a
     // JWT, and storing that as the bearer would 401 every api-service call.
     onSuccess: async (ctx: { response: Response }) => {
-      console.log("[auth] onSuccess hook fired, status:", ctx.response.status, "url:", ctx.response.url);
+      const url = ctx.response.url || "";
+      console.log("[auth] onSuccess hook fired, status:", ctx.response.status, "url:", url);
+
+      // Only attempt JWT capture on auth mutation endpoints.
+      // get-session returns a session object with no token field — running the
+      // body fallback there would log a false "no JWT found" and, on a future
+      // backend change, could accidentally overwrite a valid stored token.
+      const isAuthMutation =
+        url.includes("/sign-in") ||
+        url.includes("/sign-up") ||
+        url.includes("/callback");
+
+      if (!isAuthMutation) {
+        console.log("[auth] Skipping JWT capture for non-mutation endpoint:", url);
+        return;
+      }
+
       // Try header first (works on web/Android)
       const jwt = ctx.response.headers.get("set-auth-jwt");
       if (jwt) {
@@ -41,7 +57,10 @@ export const authClient = createAuthClient({
         await setBearerToken(jwt);
         return;
       }
-      // Fallback: read from response body (needed on iOS where set-* headers are stripped)
+
+      // Fallback: read from response body (needed on iOS where set-* headers are stripped).
+      // The backend's jwt() plugin must be configured with body: true so the token
+      // is included in the sign-in/sign-up response body as { token: "..." }.
       try {
         const cloned = ctx.response.clone();
         const data = await cloned.json();
@@ -49,7 +68,7 @@ export const authClient = createAuthClient({
           console.log("[auth] JWT found in response body token field, storing token");
           await setBearerToken(data.token);
         } else {
-          console.log("[auth] No JWT found in header or body token field");
+          console.log("[auth] No JWT found in header or body — backend jwt() plugin may need body:true");
         }
       } catch (_) {
         // not JSON or no token field — ignore
