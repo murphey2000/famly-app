@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, ne, desc, inArray } from 'drizzle-orm';
+import { eq, and, ne, desc, inArray, count } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 import { resolveMediaUrl } from '../lib/storage-utils.js';
@@ -161,7 +161,7 @@ export function registerPostsRoutes(app: App) {
         .offset(offset);
 
       const totalResult = await app.db
-        .select()
+        .select({ count: count() })
         .from(schema.posts)
         .where(
           authorIdFilter
@@ -230,7 +230,7 @@ export function registerPostsRoutes(app: App) {
         })
       );
 
-      app.logger.info({ count: postsWithDetails.length, total: totalResult.length }, 'Posts retrieved');
+      app.logger.info({ count: postsWithDetails.length, total: totalResult[0]?.count ?? 0 }, 'Posts retrieved');
 
       const firstPostMedia = postIds.length > 0 ? (mediaByPostId.get(postIds[0]) ?? []) : [];
       app.logger.info({ firstPostMedia }, '[Posts] post[0] media');

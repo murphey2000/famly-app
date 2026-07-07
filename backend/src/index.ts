@@ -7,6 +7,7 @@ import { registerMediaRoutes } from './routes/media.js';
 import { registerProfileRoutes } from './routes/profile.js';
 import { registerFeedRoutes } from './routes/feed.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerNewsletterRoutes } from './routes/newsletter.js';
 
 const schema = { ...appSchema, ...authSchema };
 
@@ -68,6 +69,7 @@ registerMediaRoutes(app);
 registerProfileRoutes(app);
 registerFeedRoutes(app);
 registerAuthRoutes(app);
+registerNewsletterRoutes(app);
 
 await app.run();
 app.logger.info('FamilyBook backend initialized');

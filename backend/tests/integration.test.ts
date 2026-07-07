@@ -1473,6 +1473,59 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // Newsletter - Get by ID
+  let newsletterId: string;
+
+  test("Generate newsletter to get its ID for GET test", async () => {
+    const res = await authenticatedApi("/api/newsletter/generate", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: 7, year: 2026 }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    newsletterId = data.id;
+    expect(newsletterId).toBeDefined();
+  });
+
+  test("Get newsletter by ID", async () => {
+    const res = await authenticatedApi(`/api/newsletter/${newsletterId}`, authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(newsletterId);
+    expect(typeof data.month).toBe("number");
+    expect(typeof data.year).toBe("number");
+    expect(data.family_name).toBeDefined();
+    expect(data.headline).toBeDefined();
+    expect(Array.isArray(data.sections)).toBe(true);
+    expect(Array.isArray(data.member_sections)).toBe(true);
+    expect(Array.isArray(data.featured_photos)).toBe(true);
+    expect(typeof data.stats).toBe("object");
+    expect(data.closing).toBeDefined();
+    expect(data.created_at).toBeDefined();
+  });
+
+  test("Get non-existent newsletter returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/newsletter/00000000-0000-0000-0000-000000000000",
+      authToken
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Get newsletter with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/newsletter/invalid-uuid",
+      authToken
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Get newsletter without auth returns 401", async () => {
+    const res = await api(`/api/newsletter/${newsletterId}`);
+    await expectStatus(res, 401);
+  });
+
   // Auth - Token
   test("Get JWT token from session cookie", async () => {
     const res = await authenticatedApi("/api/auth/token", authToken);
