@@ -16,7 +16,7 @@ export type App = typeof app;
 
 app.withAuth({
   trustedOrigins: [
-    "https://2gpjz4y4vbbyzy5b237skxwkqwsqua78.app.specular.dev",
+    process.env.APP_URL || 'https://vqprhrdr6pemce78dksqkeqpdfka3x56.app.specular.dev',
     "https://2b74c067-e8de-4846-ada9-033ab988fdfb.newly.dev",
     "famly://",
   ],
