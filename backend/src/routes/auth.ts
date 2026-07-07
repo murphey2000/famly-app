@@ -31,9 +31,11 @@ export function registerAuthRoutes(app: App) {
         // Check for Bearer token first (it takes precedence for simplicity)
         const authHeader = request.headers.authorization;
         if (authHeader?.startsWith('Bearer ')) {
-          const bearerToken = authHeader.substring(7); // Remove 'Bearer ' prefix
-          app.logger.info({}, '[/api/auth/token] Bearer token found, returning it');
-          return { token: bearerToken };
+          // Validate the token by running requireAuth — it will send 401 if invalid
+          const session = await requireAuth(request, reply);
+          if (!session) return;
+          app.logger.info({ userId: session.user.id }, '[/api/auth/token] Bearer token validated');
+          return { token: authHeader.substring(7) };
         }
 
         // Try cookie-based session
