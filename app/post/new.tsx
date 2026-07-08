@@ -94,6 +94,7 @@ export default function NewPostScreen() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 2500);
   };
 
   const handlePickImage = async () => {
@@ -556,8 +557,15 @@ export default function NewPostScreen() {
         </Text>
 
         <AnimatedPressable
-          onPress={handlePost}
-          disabled={!canPost || isLoading}
+          onPress={() => {
+            if (!canPost) {
+              console.log("[NewPost] Posten tapped while disabled — showing toast");
+              showToast("Bitte schreib etwas oder füge ein Foto hinzu");
+              return;
+            }
+            handlePost();
+          }}
+          disabled={isLoading}
           style={{
             backgroundColor: canPost && !isLoading ? COLORS.primary : COLORS.surfaceSecondary,
             borderRadius: 10,
@@ -612,6 +620,19 @@ export default function NewPostScreen() {
             }}
             autoFocus
           />
+
+          {/* Hint text — only visible when nothing has been entered yet */}
+          {text.trim().length === 0 && media === null && (
+            <Text
+              style={{
+                fontSize: 13,
+                color: COLORS.textTertiary,
+                marginTop: -8,
+              }}
+            >
+              Schreib etwas, um den Beitrag zu aktivieren
+            </Text>
+          )}
 
           {/* Media preview */}
           {media && (
