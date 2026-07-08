@@ -625,13 +625,10 @@ export function registerPostsRoutes(app: App) {
       }
 
       try {
-        const systemPrompt = `Du bist ein Familientagebuch-Assistent. Schreibe einen kurzen, warmen Eintrag auf Deutsch.
-Halte dich strikt an die genannten Fakten – erfinde nichts dazu.
-Maximal 40 Wörter für die Geschichte. Ton: persönlich und herzlich, wie ein Tagebucheintrag – nicht poetisch.
-Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
+        const systemPrompt = `Du bist ein Assistent der Familienerinnerungen minimal aufpoliert. Deine Regel: Verändere den eingegebenen Text so wenig wie möglich. Korrigiere nur offensichtliche Tippfehler und Grammatikfehler. Füge NICHTS hinzu, was nicht in der Eingabe steht – keine Emotionen, keine Ausschmückungen, keine neuen Details. Der Text soll sich anfühlen als hätte ihn das Familienmitglied selbst geschrieben, nur etwas sauberer. Antworte immer in der Sprache der Eingabe.`;
 
         const userText = post[0].raw_text || '';
-        const fullPrompt = `${systemPrompt}\n\nText zum Verbessern:\n${userText}`;
+        const userPrompt = `Eingabe: "${userText}"\n\nErstelle:\n1. Einen kurzen Titel (max. 5 Wörter, direkt aus dem Inhalt)\n2. Den Text leicht bereinigt – maximal 20% länger als die Eingabe, keine neuen Informationen\n\nAntworte als JSON: {"title": "...", "story": "..."}`;
 
         // Determine if we have image media
         const hasImage = mediaRows.length > 0 && !!mediaRows[0].url;
@@ -651,8 +648,12 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
             model: 'openai/gpt-4o-mini',
             messages: [
               {
+                role: 'system',
+                content: systemPrompt,
+              },
+              {
                 role: 'user',
-                content: fullPrompt,
+                content: userPrompt,
               },
             ],
           }),
@@ -796,8 +797,8 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
           return reply.status(500).send({ error: 'AI generation failed' });
         }
 
-        const systemPrompt = 'Du bist ein Assistent der Familienerinnerungen formuliert. Deine Aufgabe: Formuliere den eingegebenen Text als kurzen, persönlichen Satz oder zwei – maximal dreimal so lang wie die Eingabe. Keine Ausschmückungen, kein Auffüllen. Schreib so, als würde ein Familienmitglied die Erinnerung erzählen – warm, direkt, echt. Behalte alle persönlichen Details bei. Antworte immer in der Sprache der Eingabe.';
-        const userMessage = `Eingabe: "${post[0].raw_text}"\n\nErstelle:\n1. Einen kurzen Titel (max. 6 Wörter)\n2. Einen kurzen, persönlichen Text (max. 3 Sätze, nicht länger als das Dreifache der Eingabe)\n\nAntworte als JSON: {"title": "...", "story": "..."}`;
+        const systemPrompt = `Du bist ein Assistent der Familienerinnerungen minimal aufpoliert. Deine Regel: Verändere den eingegebenen Text so wenig wie möglich. Korrigiere nur offensichtliche Tippfehler und Grammatikfehler. Füge NICHTS hinzu, was nicht in der Eingabe steht – keine Emotionen, keine Ausschmückungen, keine neuen Details. Der Text soll sich anfühlen als hätte ihn das Familienmitglied selbst geschrieben, nur etwas sauberer. Antworte immer in der Sprache der Eingabe.`;
+        const userMessage = `Eingabe: "${post[0].raw_text}"\n\nErstelle:\n1. Einen kurzen Titel (max. 5 Wörter, direkt aus dem Inhalt)\n2. Den Text leicht bereinigt – maximal 20% länger als die Eingabe, keine neuen Informationen\n\nAntworte als JSON: {"title": "...", "story": "..."}`;
 
         app.logger.info({ postId: request.params.id }, 'Calling OpenRouter API for AI generation');
 
