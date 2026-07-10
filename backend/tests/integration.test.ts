@@ -1548,4 +1548,197 @@ describe("API Integration Tests", () => {
     const res = await api("/api/feed");
     await expectStatus(res, 401);
   });
+
+  // Anniversaries
+  let anniversaryId: string;
+
+  test("Create an anniversary", async () => {
+    const res = await authenticatedApi("/api/anniversaries", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Wedding Anniversary",
+        date: "2000-06-15",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    anniversaryId = data.id;
+    expect(anniversaryId).toBeDefined();
+    expect(data.family_id).toBeDefined();
+    expect(data.title).toBe("Wedding Anniversary");
+    expect(data.date).toBe("2000-06-15");
+    expect(data.created_by).toBeDefined();
+    expect(data.created_at).toBeDefined();
+  });
+
+  test("Create anniversary with missing title returns 400", async () => {
+    const res = await authenticatedApi("/api/anniversaries", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: "2000-06-15",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Create anniversary with missing date returns 400", async () => {
+    const res = await authenticatedApi("/api/anniversaries", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Wedding Anniversary",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Create anniversary without auth returns 401", async () => {
+    const res = await api("/api/anniversaries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Birthday",
+        date: "1990-05-20",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Get all anniversaries", async () => {
+    const res = await authenticatedApi("/api/anniversaries", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.anniversaries)).toBe(true);
+    // Verify structure if anniversaries exist
+    if (data.anniversaries.length > 0) {
+      expect(data.anniversaries[0].id).toBeDefined();
+      expect(data.anniversaries[0].family_id).toBeDefined();
+      expect(data.anniversaries[0].title).toBeDefined();
+      expect(data.anniversaries[0].date).toBeDefined();
+      expect(data.anniversaries[0].created_by).toBeDefined();
+      expect(data.anniversaries[0].created_at).toBeDefined();
+    }
+  });
+
+  test("Get anniversaries without auth returns 401", async () => {
+    const res = await api("/api/anniversaries");
+    await expectStatus(res, 401);
+  });
+
+  test("Get upcoming anniversaries", async () => {
+    const res = await authenticatedApi("/api/anniversaries/upcoming", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.anniversaries)).toBe(true);
+    // Verify structure if upcoming anniversaries exist
+    if (data.anniversaries.length > 0) {
+      expect(data.anniversaries[0].id).toBeDefined();
+      expect(data.anniversaries[0].family_id).toBeDefined();
+      expect(data.anniversaries[0].title).toBeDefined();
+      expect(data.anniversaries[0].date).toBeDefined();
+      expect(data.anniversaries[0].created_by).toBeDefined();
+      expect(data.anniversaries[0].created_at).toBeDefined();
+      expect(typeof data.anniversaries[0].days_until).toBe("number");
+    }
+  });
+
+  test("Get upcoming anniversaries without auth returns 401", async () => {
+    const res = await api("/api/anniversaries/upcoming");
+    await expectStatus(res, 401);
+  });
+
+  test("Delete an anniversary", async () => {
+    const res = await authenticatedApi(
+      `/api/anniversaries/${anniversaryId}`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Delete non-existent anniversary returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/anniversaries/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Delete anniversary with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/anniversaries/invalid-uuid",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Delete anniversary without auth returns 401", async () => {
+    const res = await api(
+      `/api/anniversaries/${anniversaryId}`,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Create another anniversary for deletion test", async () => {
+    const res = await authenticatedApi("/api/anniversaries", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Birth Anniversary",
+        date: "1995-07-22",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+  });
+
+  test("Get deleted anniversary returns 404", async () => {
+    // First create and delete an anniversary
+    const createRes = await authenticatedApi("/api/anniversaries", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Temporary Anniversary",
+        date: "1980-12-25",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const createdData = await createRes.json();
+    const tempId = createdData.id;
+
+    // Delete it
+    const deleteRes = await authenticatedApi(
+      `/api/anniversaries/${tempId}`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(deleteRes, 200);
+
+    // Verify it's gone by checking the list
+    const listRes = await authenticatedApi("/api/anniversaries", authToken);
+    await expectStatus(listRes, 200);
+    const listData = await listRes.json();
+    const found = listData.anniversaries.find(
+      (a: { id: string }) => a.id === tempId
+    );
+    expect(found).toBeUndefined();
+  });
 });
