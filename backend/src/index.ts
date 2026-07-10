@@ -9,6 +9,7 @@ import { registerProfileRoutes } from './routes/profile.js';
 import { registerFeedRoutes } from './routes/feed.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerNewsletterRoutes } from './routes/newsletter.js';
+import { register as registerAnniversariesRoutes } from './routes/anniversaries.js';
 
 const schema = { ...appSchema, ...authSchema };
 
@@ -74,6 +75,7 @@ registerProfileRoutes(app);
 registerFeedRoutes(app);
 registerAuthRoutes(app);
 registerNewsletterRoutes(app);
+registerAnniversariesRoutes(app, app.fastify);
 
 await app.run();
 app.logger.info('FamilyBook backend initialized');
