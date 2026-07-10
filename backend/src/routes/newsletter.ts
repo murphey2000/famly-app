@@ -1,7 +1,10 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
+import * as authSchema from '../db/schema/auth-schema.js';
+import { generateNewsletterPdf } from '../newsletter/generatePdf.js';
+import { sendNewsletterEmails } from '../newsletter/sendNewsletter.js';
 
 type NewsletterContent = {
   headline: string;
@@ -445,6 +448,58 @@ Erstelle einen Newsletter als JSON mit folgender Struktur:
           .limit(1);
 
         const familyName = families.length > 0 ? families[0].name : '';
+
+        // Generate PDF in the background (non-blocking)
+        setImmediate(async () => {
+          try {
+            await generateNewsletterPdf(familyName, month, year, output);
+            app.logger.info({ newsletterId: newsletter.id, familyId }, 'Newsletter PDF generated successfully');
+          } catch (err) {
+            app.logger.warn({ err, newsletterId: newsletter.id }, 'PDF generation failed, continuing without PDF');
+          }
+        });
+
+        // Send emails to family members in the background (non-blocking)
+        setImmediate(async () => {
+          try {
+            const familyMembers = await app.db
+              .select()
+              .from(schema.family_members)
+              .where(eq(schema.family_members.family_id, familyId));
+
+            if (familyMembers.length === 0) {
+              app.logger.warn({ familyId }, 'No family members found for newsletter email');
+              return;
+            }
+
+            // Get user details for members
+            const memberUserIds = familyMembers.map((m) => m.user_id);
+            const memberUsers = await app.db
+              .select()
+              .from(authSchema.user)
+              .where(inArray(authSchema.user.id, memberUserIds));
+
+            if (memberUsers.length === 0) {
+              app.logger.warn({ familyId }, 'No users found for family members');
+              return;
+            }
+
+            const result = await sendNewsletterEmails(
+              familyName,
+              month,
+              year,
+              output,
+              memberUsers,
+              process.env.RESEND_API_KEY,
+              process.env.NEWSLETTER_FROM_EMAIL || 'newsletter@famly.app',
+              app.logger
+            );
+
+            app.logger.info({ familyId, sent: result.sent, failed: result.failed }, 'Newsletter emails sent');
+          } catch (err) {
+            app.logger.error({ err, familyId }, 'Error sending newsletter emails');
+          }
+        });
 
         return reply.status(201).send({
           id: newsletter.id,
