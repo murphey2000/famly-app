@@ -1551,6 +1551,7 @@ describe("API Integration Tests", () => {
 
   // Anniversaries
   let anniversaryId: string;
+  let secondAnniversaryId: string; // For testing deletion without auth
 
   test("Create an anniversary", async () => {
     const res = await authenticatedApi("/api/anniversaries", authToken, {
@@ -1649,6 +1650,21 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Create second anniversary for deletion tests", async () => {
+    const res = await authenticatedApi("/api/anniversaries", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Birth Anniversary",
+        date: "1995-07-22",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    secondAnniversaryId = data.id;
+    expect(secondAnniversaryId).toBeDefined();
+  });
+
   test("Delete an anniversary", async () => {
     const res = await authenticatedApi(
       `/api/anniversaries/${anniversaryId}`,
@@ -1660,6 +1676,17 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.success).toBe(true);
+  });
+
+  test("Get deleted anniversary returns 404 in list check", async () => {
+    // Verify it's gone by checking the list
+    const listRes = await authenticatedApi("/api/anniversaries", authToken);
+    await expectStatus(listRes, 200);
+    const listData = await listRes.json();
+    const found = listData.anniversaries.find(
+      (a: { id: string }) => a.id === anniversaryId
+    );
+    expect(found).toBeUndefined();
   });
 
   test("Delete non-existent anniversary returns 404", async () => {
@@ -1686,7 +1713,7 @@ describe("API Integration Tests", () => {
 
   test("Delete anniversary without auth returns 401", async () => {
     const res = await api(
-      `/api/anniversaries/${anniversaryId}`,
+      `/api/anniversaries/${secondAnniversaryId}`,
       {
         method: "DELETE",
       }
@@ -1694,23 +1721,8 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Create another anniversary for deletion test", async () => {
+  test("Create third anniversary for another deletion test", async () => {
     const res = await authenticatedApi("/api/anniversaries", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: "Birth Anniversary",
-        date: "1995-07-22",
-      }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    expect(data.id).toBeDefined();
-  });
-
-  test("Get deleted anniversary returns 404", async () => {
-    // First create and delete an anniversary
-    const createRes = await authenticatedApi("/api/anniversaries", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1718,27 +1730,8 @@ describe("API Integration Tests", () => {
         date: "1980-12-25",
       }),
     });
-    await expectStatus(createRes, 201);
-    const createdData = await createRes.json();
-    const tempId = createdData.id;
-
-    // Delete it
-    const deleteRes = await authenticatedApi(
-      `/api/anniversaries/${tempId}`,
-      authToken,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(deleteRes, 200);
-
-    // Verify it's gone by checking the list
-    const listRes = await authenticatedApi("/api/anniversaries", authToken);
-    await expectStatus(listRes, 200);
-    const listData = await listRes.json();
-    const found = listData.anniversaries.find(
-      (a: { id: string }) => a.id === tempId
-    );
-    expect(found).toBeUndefined();
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
   });
 });
