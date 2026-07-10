@@ -6,6 +6,7 @@ import { BlurView } from "expo-blur";
 import { Home, Clock, Plus, Newspaper, User } from "lucide-react-native";
 import { Stack } from "expo-router";
 import { COLORS } from "@/constants/Colors";
+import { FilterProvider } from "@/contexts/FilterContext";
 
 function FamlyTabBar() {
   const router = useRouter();
@@ -121,15 +122,17 @@ function FamlyTabBar() {
 
 export default function TabLayout() {
   return (
-    <View style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(home)" />
-        <Stack.Screen name="memories" />
-        <Stack.Screen name="newsletter" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="add" />
-      </Stack>
-      <FamlyTabBar />
-    </View>
+    <FilterProvider>
+      <View style={{ flex: 1 }}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(home)" />
+          <Stack.Screen name="memories" />
+          <Stack.Screen name="newsletter" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="add" />
+        </Stack>
+        <FamlyTabBar />
+      </View>
+    </FilterProvider>
   );
 }

@@ -54,3 +54,7 @@ export function getMonthName(dateString: string): string {
     return "";
   }
 }
+
+export function getMonthNumber(dateString: string): number {
+  try { return parseISO(dateString).getMonth() + 1; } catch { return 0; }
+}

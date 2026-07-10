@@ -1,8 +1,10 @@
 import React from "react";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
+import { FilterProvider } from "@/contexts/FilterContext";
 
 export default function TabLayoutIOS() {
   return (
+    <FilterProvider>
     <NativeTabs>
       <NativeTabs.Trigger name="(home)">
         <Icon sf="house.fill" />
@@ -29,5 +31,6 @@ export default function TabLayoutIOS() {
         <Label>Profil</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
+    </FilterProvider>
   );
 }

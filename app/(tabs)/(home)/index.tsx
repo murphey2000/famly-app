@@ -13,8 +13,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Clock } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { apiGet } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFilter } from "@/contexts/FilterContext";
 import { SkeletonLine } from "@/components/SkeletonLine";
 import { InspirationChips } from "@/components/InspirationChips";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
@@ -22,7 +22,8 @@ import { PostCard } from "@/components/PostCard";
 import { useFeed } from "@/hooks/useFeed";
 import { useFamily } from "@/hooks/useFamily";
 import { useInfinitePosts } from "@/hooks/useInfinitePosts";
-import type { FamilyMember, FamilyStats, TodayMemory, FeedItemBirthday } from "@/types";
+import { useTodayMemory } from "@/hooks/useTodayMemory";
+import type { FamilyMember, TodayMemory, FeedItemBirthday } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -83,13 +84,13 @@ function MemberAvatarRow({ members }: { members: FamilyMember[] }) {
   );
 }
 
-function StatsRow({ stats }: { stats: FamilyStats }) {
+function StatsRow({ photos, videos, memories }: { photos: number; videos: number; memories: number }) {
   const photosLabel = "Fotos";
   const videosLabel = "Videos";
   const memoriesLabel = "Erinnerungen";
-  const photosCount = String(stats.photos);
-  const videosCount = String(stats.videos);
-  const memoriesCount = String(stats.memories);
+  const photosCount = String(photos);
+  const videosCount = String(videos);
+  const memoriesCount = String(memories);
 
   return (
     <ScrollView
@@ -411,14 +412,14 @@ export default function FeedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const [stats, setStats] = useState<FamilyStats | null>(null);
+  const { selectedAuthorId, setSelectedAuthorId } = useFilter();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
   const [timedOut, setTimedOut] = useState(false);
 
   const feedQuery = useFeed(selectedAuthorId);
   const familyQuery = useFamily();
   const infinitePostsQuery = useInfinitePosts(selectedAuthorId);
+  const todayMemoryQuery = useTodayMemory();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -433,12 +434,14 @@ export default function FeedScreen() {
 
   const posts = infinitePostsQuery.data?.pages.flatMap((page) => page.posts) ?? [];
 
-  const firstMemoryItem = feedItems.find((item) => item.kind === "memory");
-  const todayMemory: TodayMemory | null = firstMemoryItem && firstMemoryItem.kind === "memory"
-    ? { id: firstMemoryItem.post.id, year: firstMemoryItem.year, post: firstMemoryItem.post }
-    : null;
+  const todayMemories = todayMemoryQuery.data ?? [];
+  const todayMemory: TodayMemory | null = todayMemories[0] ?? null;
 
   const birthdayItems = feedItems.filter((item): item is FeedItemBirthday => item.kind === "birthday");
+
+  const photoCount = posts.filter((p) => (p.media ?? []).some((m) => m.type === "photo")).length;
+  const videoCount = posts.filter((p) => (p.media ?? []).some((m) => m.type === "video")).length;
+  const memoryCount = posts.length;
 
   const loading = ((feedQuery.isPending && !feedQuery.data) || (familyQuery.isPending && !familyQuery.data)) && !timedOut;
   const error = feedQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
@@ -449,19 +452,6 @@ export default function FeedScreen() {
       router.replace("/onboarding");
     }
   }, [familyQuery.isFetched, familyQuery.data, router]);
-
-  useEffect(() => {
-    if (family && posts.length > 0) {
-      apiGet<FamilyStats>("/api/families/stats")
-        .then((s) => {
-          console.log("[Feed] Stats loaded:", s);
-          setStats(s);
-        })
-        .catch(() => {
-          console.log("[Feed] Stats fetch failed, skipping stats row");
-        });
-    }
-  }, [family, posts.length]);
 
   const handleRefresh = () => {
     console.log("[Feed] Pull to refresh triggered");
@@ -514,7 +504,7 @@ export default function FeedScreen() {
       {todayMemory && <MemoryBanner memory={todayMemory} />}
 
       {/* Stats row — only when posts exist */}
-      {posts.length > 0 && stats && <StatsRow stats={stats} />}
+      {posts.length > 0 && <StatsRow photos={photoCount} videos={videoCount} memories={memoryCount} />}
 
       {/* Author filter chips */}
       {family && family.members && family.members.length > 0 && (

@@ -2,7 +2,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiGet } from "@/utils/api";
 import type { Post } from "@/types";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 12;
 
 function normalizePosts(data: { posts: Post[] } | Post[]): Post[] {
   const rawPosts = Array.isArray(data) ? data : data?.posts ?? [];
