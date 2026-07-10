@@ -46,6 +46,7 @@ export default function OnboardingScreen() {
 
   // Birthday step state
   const [birthday, setBirthday] = useState<Date>(new Date(1990, 0, 1));
+  const birthdayRef = useRef<Date>(new Date(1990, 0, 1));
   const [showAndroidPicker, setShowAndroidPicker] = useState(false);
   const [isSavingBirthday, setIsSavingBirthday] = useState(false);
 
@@ -145,7 +146,7 @@ export default function OnboardingScreen() {
   };
 
   const handleSaveBirthday = async () => {
-    const birthdayStr = formatBirthdayApi(birthday);
+    const birthdayStr = formatBirthdayApi(birthdayRef.current);
     console.log("[Onboarding] Save birthday button pressed:", birthdayStr);
     try {
       setIsSavingBirthday(true);
@@ -169,6 +170,7 @@ export default function OnboardingScreen() {
 
   const handleDateChange = (date: Date) => {
     console.log("[Onboarding] Birthday date changed:", formatBirthdayApi(date));
+    birthdayRef.current = date;
     setBirthday(date);
   };
 

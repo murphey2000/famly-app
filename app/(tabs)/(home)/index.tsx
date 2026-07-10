@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -544,8 +544,10 @@ export default function FeedScreen() {
   const loading = ((feedQuery.isPending && !feedQuery.data) || (familyQuery.isPending && !familyQuery.data)) && !timedOut;
   const error = feedQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
 
+  const hasRedirectedRef = useRef(false);
   useEffect(() => {
-    if (familyQuery.isFetched && !familyQuery.data) {
+    if (familyQuery.isFetched && !familyQuery.data && !hasRedirectedRef.current) {
+      hasRedirectedRef.current = true;
       console.log("[Feed] No family found, redirecting to onboarding");
       router.replace("/onboarding");
     }
