@@ -629,6 +629,8 @@ export function registerPostsRoutes(app: App) {
 - Verbessere Stil, Wortwahl und Lesefluss, damit der Text warm und lebendig klingt.
 - Du darfst die BESCHREIBUNG ausschmücken (z.B. Wortwahl, Satzbau, stimmungsvolle Adjektive), aber KEINE neuen Fakten, Ereignisse, Personen, Orte oder Details hinzufügen, die nicht im Originaltext stehen.
 - Erfinde nichts dazu, was nicht explizit oder eindeutig implizit im Text enthalten ist.
+- Nutze ausschließlich Informationen, die explizit im Originaltext stehen. Erfinde keine Handlungen, Gefühle, Orte oder Lektionen, die der Nutzer nicht selbst erwähnt hat.
+- Wenn der eingegebene Text zu kurz, vage oder inhaltsleer ist (z.B. nur ein Titel oder Stichwort ohne beschriebenen Inhalt), erfinde KEINEN Ersatzinhalt. Gib stattdessen den Text unverändert zurück und setze den Titel direkt aus dem eingegebenen Text.
 - Korrigiere Rechtschreibung und Grammatik.
 - Der Text darf um maximal 30% länger werden als das Original.
 - Der Titel muss sich direkt aus dem Inhalt des Originaltexts ergeben, nicht frei erfunden sein.
@@ -808,6 +810,8 @@ export function registerPostsRoutes(app: App) {
 - Verbessere Stil, Wortwahl und Lesefluss, damit der Text warm und lebendig klingt.
 - Du darfst die BESCHREIBUNG ausschmücken (z.B. Wortwahl, Satzbau, stimmungsvolle Adjektive), aber KEINE neuen Fakten, Ereignisse, Personen, Orte oder Details hinzufügen, die nicht im Originaltext stehen.
 - Erfinde nichts dazu, was nicht explizit oder eindeutig implizit im Text enthalten ist.
+- Nutze ausschließlich Informationen, die explizit im Originaltext stehen. Erfinde keine Handlungen, Gefühle, Orte oder Lektionen, die der Nutzer nicht selbst erwähnt hat.
+- Wenn der eingegebene Text zu kurz, vage oder inhaltsleer ist (z.B. nur ein Titel oder Stichwort ohne beschriebenen Inhalt), erfinde KEINEN Ersatzinhalt. Gib stattdessen den Text unverändert zurück und setze den Titel direkt aus dem eingegebenen Text.
 - Korrigiere Rechtschreibung und Grammatik.
 - Der Text darf um maximal 30% länger werden als das Original.
 - Der Titel muss sich direkt aus dem Inhalt des Originaltexts ergeben, nicht frei erfunden sein.
