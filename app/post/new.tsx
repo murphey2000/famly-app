@@ -344,12 +344,11 @@ export default function NewPostScreen() {
           </AnimatedPressable>
         </View>
 
-        <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
-          <ScrollView
-            contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 60 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <ScrollView
+          contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 60 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
             {/* AI badge */}
             <View
               style={{
@@ -534,7 +533,6 @@ export default function NewPostScreen() {
               </>
             )}
           </ScrollView>
-        </Pressable>
 
         <Toast message={toastMessage} visible={toastVisible} />
       </KeyboardAvoidingView>
@@ -620,12 +618,11 @@ export default function NewPostScreen() {
         </AnimatedPressable>
       </View>
 
-      <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 60 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 60 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
           {/* Author row */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <AuthorAvatar author={{ name: user?.name || "Du", image: user?.image }} size={40} />
@@ -745,7 +742,6 @@ export default function NewPostScreen() {
             </View>
           )}
         </ScrollView>
-      </Pressable>
 
       {/* Bottom toolbar */}
       <View
