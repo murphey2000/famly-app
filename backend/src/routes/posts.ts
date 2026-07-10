@@ -625,13 +625,19 @@ export function registerPostsRoutes(app: App) {
       }
 
       try {
-        const systemPrompt = `Du bist ein Familientagebuch-Assistent. Schreibe einen kurzen, warmen Eintrag auf Deutsch.
-Halte dich strikt an die genannten Fakten – erfinde nichts dazu.
-Maximal 40 Wörter für die Geschichte. Ton: persönlich und herzlich, wie ein Tagebucheintrag – nicht poetisch.
-Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
+        const systemPrompt = `Du bist ein Assistent, der Familienerinnerungen warm und lebendig aufbereitet. Deine Regeln:
+- Verbessere Stil, Wortwahl und Lesefluss, damit der Text warm und lebendig klingt.
+- Du darfst die BESCHREIBUNG ausschmücken (z.B. Wortwahl, Satzbau, stimmungsvolle Adjektive), aber KEINE neuen Fakten, Ereignisse, Personen, Orte oder Details hinzufügen, die nicht im Originaltext stehen.
+- Erfinde nichts dazu, was nicht explizit oder eindeutig implizit im Text enthalten ist.
+- Nutze ausschließlich Informationen, die explizit im Originaltext stehen. Erfinde keine Handlungen, Gefühle, Orte oder Lektionen, die der Nutzer nicht selbst erwähnt hat.
+- Wenn der eingegebene Text zu kurz, vage oder inhaltsleer ist (z.B. nur ein Titel oder Stichwort ohne beschriebenen Inhalt), erfinde KEINEN Ersatzinhalt. Gib stattdessen den Text unverändert zurück und setze den Titel direkt aus dem eingegebenen Text.
+- Korrigiere Rechtschreibung und Grammatik.
+- Der Text darf um maximal 30% länger werden als das Original.
+- Der Titel muss sich direkt aus dem Inhalt des Originaltexts ergeben, nicht frei erfunden sein.
+- Antworte immer in der Sprache der Eingabe.`;
 
         const userText = post[0].raw_text || '';
-        const fullPrompt = `${systemPrompt}\n\nText zum Verbessern:\n${userText}`;
+        const userPrompt = `Originaltext: "${userText}"\n\nErstelle:\n1. Einen kurzen Titel (max. 5 Wörter, direkt aus dem Inhalt)\n2. Den aufbereiteten Text – maximal 30% länger als das Original, keine neuen Fakten\n\nAntworte als JSON: {"title": "...", "story": "..."}`;
 
         // Determine if we have image media
         const hasImage = mediaRows.length > 0 && !!mediaRows[0].url;
@@ -651,8 +657,12 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
             model: 'openai/gpt-4o-mini',
             messages: [
               {
+                role: 'system',
+                content: systemPrompt,
+              },
+              {
                 role: 'user',
-                content: fullPrompt,
+                content: userPrompt,
               },
             ],
           }),
@@ -796,8 +806,17 @@ Antworte ausschließlich als JSON: {"title": "...", "story": "..."}`;
           return reply.status(500).send({ error: 'AI generation failed' });
         }
 
-        const systemPrompt = 'Du bist ein Assistent der Familienerinnerungen formuliert. Deine Aufgabe: Formuliere den eingegebenen Text als kurzen, persönlichen Satz oder zwei – maximal dreimal so lang wie die Eingabe. Keine Ausschmückungen, kein Auffüllen. Schreib so, als würde ein Familienmitglied die Erinnerung erzählen – warm, direkt, echt. Behalte alle persönlichen Details bei. Antworte immer in der Sprache der Eingabe.';
-        const userMessage = `Eingabe: "${post[0].raw_text}"\n\nErstelle:\n1. Einen kurzen Titel (max. 6 Wörter)\n2. Einen kurzen, persönlichen Text (max. 3 Sätze, nicht länger als das Dreifache der Eingabe)\n\nAntworte als JSON: {"title": "...", "story": "..."}`;
+        const systemPrompt = `Du bist ein Assistent, der Familienerinnerungen warm und lebendig aufbereitet. Deine Regeln:
+- Verbessere Stil, Wortwahl und Lesefluss, damit der Text warm und lebendig klingt.
+- Du darfst die BESCHREIBUNG ausschmücken (z.B. Wortwahl, Satzbau, stimmungsvolle Adjektive), aber KEINE neuen Fakten, Ereignisse, Personen, Orte oder Details hinzufügen, die nicht im Originaltext stehen.
+- Erfinde nichts dazu, was nicht explizit oder eindeutig implizit im Text enthalten ist.
+- Nutze ausschließlich Informationen, die explizit im Originaltext stehen. Erfinde keine Handlungen, Gefühle, Orte oder Lektionen, die der Nutzer nicht selbst erwähnt hat.
+- Wenn der eingegebene Text zu kurz, vage oder inhaltsleer ist (z.B. nur ein Titel oder Stichwort ohne beschriebenen Inhalt), erfinde KEINEN Ersatzinhalt. Gib stattdessen den Text unverändert zurück und setze den Titel direkt aus dem eingegebenen Text.
+- Korrigiere Rechtschreibung und Grammatik.
+- Der Text darf um maximal 30% länger werden als das Original.
+- Der Titel muss sich direkt aus dem Inhalt des Originaltexts ergeben, nicht frei erfunden sein.
+- Antworte immer in der Sprache der Eingabe.`;
+        const userMessage = `Originaltext: "${post[0].raw_text}"\n\nErstelle:\n1. Einen kurzen Titel (max. 5 Wörter, direkt aus dem Inhalt)\n2. Den aufbereiteten Text – maximal 30% länger als das Original, keine neuen Fakten\n\nAntworte als JSON: {"title": "...", "story": "..."}`;
 
         app.logger.info({ postId: request.params.id }, 'Calling OpenRouter API for AI generation');
 
