@@ -12,13 +12,14 @@ import {
   TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
 import DatePicker from "@/components/DatePicker";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { Copy, Share2, LogOut, Users, ChevronRight, Check, Cake, Trash2, ExternalLink, CalendarHeart, Plus, Star } from "lucide-react-native";
+import { Copy, Share2, LogOut, Users, ChevronRight, Check, Cake, Trash2, ExternalLink, CalendarHeart, Plus, Star, Newspaper } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { useAuth } from "@/contexts/AuthContext";
@@ -102,6 +103,7 @@ function MemberAvatar({ member }: { member: FamilyMember }) {
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [family, setFamily] = useState<Family | null>(null);
   const [loading, setLoading] = useState(true);
@@ -546,6 +548,54 @@ export default function SettingsScreen() {
               <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.primary }}>
                 + Jahrestag hinzufügen
               </Text>
+            </AnimatedPressable>
+          </View>
+
+          {/* Monatsrückblick Card */}
+          <View
+            style={{
+              backgroundColor: COLORS.surface,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              overflow: "hidden",
+              boxShadow: COLORS.cardShadow,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.textTertiary, textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 }}>
+              Rückblick
+            </Text>
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[Settings] Monatsrückblick row pressed");
+                router.push("/(tabs)/settings/newsletters");
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                gap: 12,
+                borderTopWidth: 1,
+                borderTopColor: COLORS.divider,
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Newspaper size={18} color={COLORS.primary} />
+              </View>
+              <Text style={{ flex: 1, fontSize: 15, color: COLORS.text, fontWeight: "500" }}>
+                Monatsrückblick
+              </Text>
+              <ChevronRight size={16} color={COLORS.textTertiary} />
             </AnimatedPressable>
           </View>
 

@@ -1,5 +1,11 @@
 import { Stack } from "expo-router";
 
 export default function SettingsLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="newsletters" />
+      <Stack.Screen name="newsletter/[id]" />
+    </Stack>
+  );
 }
