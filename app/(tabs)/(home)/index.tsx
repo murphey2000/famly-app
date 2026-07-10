@@ -23,7 +23,7 @@ import { useFeed } from "@/hooks/useFeed";
 import { useFamily } from "@/hooks/useFamily";
 import { useInfinitePosts } from "@/hooks/useInfinitePosts";
 import { useTodayMemory } from "@/hooks/useTodayMemory";
-import type { FamilyMember, TodayMemory, FeedItemBirthday } from "@/types";
+import type { FamilyMember, TodayMemory, FeedItemBirthday, Post } from "@/types";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -58,6 +58,104 @@ function PostCardSkeleton() {
       <SkeletonLine width="100%" height={13} />
       <SkeletonLine width="70%" height={13} />
       <SkeletonLine width="100%" height={120} />
+    </View>
+  );
+}
+
+const POLAROID_ROTATIONS = ["-6deg", "2deg", "8deg"] as const;
+
+function PolaroidStack({ posts, topPadding }: { posts: Post[]; topPadding: number }) {
+  const photoPosts = posts
+    .filter((p) => (p.media ?? []).some((m) => m.type === "photo"))
+    .slice(-3)
+    .reverse();
+
+  const frames: { photoUrl: string | null; caption: string }[] = [];
+  for (let i = 0; i < 3; i++) {
+    const p = photoPosts[i];
+    if (p) {
+      const photo = (p.media ?? []).find((m) => m.type === "photo");
+      frames.push({
+        photoUrl: photo?.url ?? null,
+        caption: (p.author?.name ?? "").split(" ")[0] || "",
+      });
+    } else {
+      frames.push({ photoUrl: null, caption: "" });
+    }
+  }
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        justifyContent: "center",
+        paddingTop: topPadding,
+        height: topPadding + 170,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+        {frames.map((frame, index) => {
+          const rotation = POLAROID_ROTATIONS[index];
+          const marginLeft = index === 0 ? 0 : -28;
+          const zIndex = index === 1 ? 3 : index === 0 ? 2 : 1;
+          const photoSource = resolveImageSource(frame.photoUrl ?? undefined);
+          return (
+            <View
+              key={index}
+              style={{
+                marginLeft,
+                zIndex,
+                transform: [{ rotate: rotation }],
+                backgroundColor: "#FFFFFF",
+                width: 120,
+                height: 148,
+                borderRadius: 4,
+                paddingTop: 8,
+                paddingHorizontal: 8,
+                paddingBottom: 28,
+                shadowColor: "rgba(180, 120, 40, 0.35)",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 1,
+                shadowRadius: 8,
+                elevation: 6,
+              }}
+            >
+              {frame.photoUrl ? (
+                <Image
+                  source={photoSource}
+                  style={{ flex: 1, borderRadius: 2 }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    flex: 1,
+                    borderRadius: 2,
+                    backgroundColor: COLORS.surfaceSecondary,
+                  }}
+                />
+              )}
+              {frame.caption.length > 0 && (
+                <Text
+                  style={{
+                    position: "absolute",
+                    bottom: 6,
+                    left: 0,
+                    right: 0,
+                    fontSize: 10,
+                    color: COLORS.textSecondary,
+                    textAlign: "center",
+                    fontWeight: "500",
+                  }}
+                  numberOfLines={1}
+                >
+                  {frame.caption}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -479,24 +577,52 @@ export default function FeedScreen() {
 
   const renderHeader = () => (
     <View>
-      {/* App Header */}
-      <View
-        style={{
-          paddingTop: insets.top + 12,
-          paddingHorizontal: 20,
-          paddingBottom: 16,
-        }}
-      >
-        <Text style={{ fontSize: 28, fontWeight: "800", color: COLORS.text, letterSpacing: -0.5 }}>
-          Famly
+      {/* Editorial Header */}
+      <View style={{ alignItems: "center", paddingBottom: 24 }}>
+        <PolaroidStack posts={posts} topPadding={insets.top + 16} />
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: "800",
+            color: COLORS.text,
+            textAlign: "center",
+            letterSpacing: -0.5,
+            marginTop: 20,
+            paddingHorizontal: 24,
+          }}
+        >
+          Eure Familiengeschichte
+        </Text>
+        <Text
+          style={{
+            fontSize: 14,
+            color: COLORS.textSecondary,
+            textAlign: "center",
+            marginTop: 6,
+            paddingHorizontal: 32,
+          }}
+        >
+          Momente festhalten. Erinnerungen bewahren.
         </Text>
         {family && (
-          <Text style={{ fontSize: 14, color: COLORS.textSecondary, fontWeight: "500", marginTop: 2 }}>
-            {family.name}
-          </Text>
+          <View
+            style={{
+              backgroundColor: COLORS.primaryMuted,
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 4,
+              marginTop: 12,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: "600" }}>
+              {family.name}
+            </Text>
+          </View>
         )}
         {family && family.members && family.members.length > 0 && (
-          <MemberAvatarRow members={family.members} />
+          <View style={{ alignItems: "center", marginTop: 12 }}>
+            <MemberAvatarRow members={family.members} />
+          </View>
         )}
       </View>
 
