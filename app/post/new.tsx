@@ -20,7 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
-import { X, Camera, Video as VideoIcon, MapPin, Play, Sparkles } from "lucide-react-native";
+import { X, Images, MapPin, Play, Sparkles } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
@@ -30,6 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const MAX_VIDEO_DURATION_MS = 60_000;
 const MAX_IMAGE_WIDTH = 1200;
+const MAX_MEDIA_COUNT = 10;
 
 function Toast({ message, visible }: { message: string; visible: boolean }) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -78,8 +79,9 @@ export default function NewPostScreen() {
   const { user } = useAuth();
 
   const [text, setText] = useState("");
-  const [media, setMedia] = useState<SelectedMedia | null>(null);
+  const [mediaList, setMediaList] = useState<SelectedMedia[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [date, setDate] = useState(new Date());
@@ -89,7 +91,7 @@ export default function NewPostScreen() {
   const [editedStory, setEditedStory] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const canPost = text.trim().length > 0 || media !== null;
+  const canPost = text.trim().length > 0 || mediaList.length > 0;
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -97,80 +99,86 @@ export default function NewPostScreen() {
     setTimeout(() => setToastVisible(false), 2500);
   };
 
-  const handlePickImage = async () => {
-    console.log("[NewPost] Pick image button pressed");
+  const handlePickMedia = async () => {
+    console.log("[NewPost] Pick media button pressed");
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Berechtigung erforderlich", "Bitte erlaube den Zugriff auf deine Fotos");
+      Alert.alert("Berechtigung erforderlich", "Bitte erlaube den Zugriff auf deine Fotos und Videos");
+      return;
+    }
+
+    const remaining = MAX_MEDIA_COUNT - mediaList.length;
+    if (remaining <= 0) {
+      showToast(`Maximal ${MAX_MEDIA_COUNT} Medien erlaubt`);
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsMultipleSelection: true,
       quality: 0.8,
+      selectionLimit: remaining,
     });
 
-    if (result.canceled) return;
-    const asset = result.assets[0];
-
-    try {
-      const resized = await manipulateAsync(
-        asset.uri,
-        [{ resize: { width: Math.min(asset.width || MAX_IMAGE_WIDTH, MAX_IMAGE_WIDTH) } }],
-        { compress: 0.8, format: SaveFormat.JPEG }
-      );
-      console.log("[NewPost] Image resized for upload:", resized.width, "x", resized.height);
-      setMedia({
-        uri: resized.uri,
-        fileName: `photo_${Date.now()}.jpg`,
-        mimeType: "image/jpeg",
-        mediaType: "photo",
-      });
-    } catch (err) {
-      console.error("[NewPost] Image resize failed, using original:", err);
-      setMedia({
-        uri: asset.uri,
-        fileName: asset.fileName || `photo_${Date.now()}.jpg`,
-        mimeType: asset.mimeType || "image/jpeg",
-        mediaType: "photo",
-      });
-    }
-  };
-
-  const handlePickVideo = async () => {
-    console.log("[NewPost] Pick video button pressed");
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Berechtigung erforderlich", "Bitte erlaube den Zugriff auf deine Videos");
+    if (result.canceled) {
+      console.log("[NewPost] Media picker cancelled");
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsMultipleSelection: false,
-    });
+    console.log("[NewPost] Media picker returned", result.assets.length, "asset(s)");
 
-    if (result.canceled) return;
-    const asset = result.assets[0];
+    const newItems: SelectedMedia[] = [];
 
-    if (asset.duration && asset.duration > MAX_VIDEO_DURATION_MS) {
-      console.log("[NewPost] Video rejected, too long:", asset.duration, "ms");
-      Alert.alert("Video zu lang", "Video zu lang (max. 60 Sekunden)");
-      return;
+    for (const asset of result.assets) {
+      if (asset.type === "video") {
+        if (asset.duration && asset.duration > MAX_VIDEO_DURATION_MS) {
+          console.log("[NewPost] Video rejected, too long:", asset.duration, "ms");
+          Alert.alert("Video zu lang", "Ein Video ist länger als 60 Sekunden und wurde übersprungen.");
+          continue;
+        }
+        newItems.push({
+          uri: asset.uri,
+          fileName: asset.fileName || `video_${Date.now()}.mp4`,
+          mimeType: asset.mimeType || "video/mp4",
+          mediaType: "video",
+        });
+        console.log("[NewPost] Video added:", asset.fileName);
+      } else {
+        try {
+          const resized = await manipulateAsync(
+            asset.uri,
+            [{ resize: { width: Math.min(asset.width || MAX_IMAGE_WIDTH, MAX_IMAGE_WIDTH) } }],
+            { compress: 0.8, format: SaveFormat.JPEG }
+          );
+          console.log("[NewPost] Image resized:", resized.width, "x", resized.height);
+          newItems.push({
+            uri: resized.uri,
+            fileName: `photo_${Date.now()}.jpg`,
+            mimeType: "image/jpeg",
+            mediaType: "photo",
+          });
+        } catch (err) {
+          console.error("[NewPost] Image resize failed, using original:", err);
+          newItems.push({
+            uri: asset.uri,
+            fileName: asset.fileName || `photo_${Date.now()}.jpg`,
+            mimeType: asset.mimeType || "image/jpeg",
+            mediaType: "photo",
+          });
+        }
+      }
     }
 
-    setMedia({
-      uri: asset.uri,
-      fileName: asset.fileName || `video_${Date.now()}.mp4`,
-      mimeType: asset.mimeType || "video/mp4",
-      mediaType: "video",
+    setMediaList((prev) => {
+      const combined = [...prev, ...newItems].slice(0, MAX_MEDIA_COUNT);
+      console.log("[NewPost] mediaList updated, count:", combined.length);
+      return combined;
     });
   };
 
-  const handleRemoveMedia = () => {
-    console.log("[NewPost] Media removed");
-    setMedia(null);
+  const handleRemoveMedia = (idx: number) => {
+    console.log("[NewPost] Remove media at index:", idx);
+    setMediaList((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handlePost = async () => {
@@ -184,11 +192,14 @@ export default function NewPostScreen() {
       });
       console.log("[NewPost] Post created with id:", post.id);
 
-      if (media) {
-        console.log("[NewPost] Uploading media:", media.mediaType);
-        await uploadFile(media, BACKEND_URL, post.id);
-        console.log("[NewPost] Media uploaded");
+      for (let i = 0; i < mediaList.length; i++) {
+        const item = mediaList[i];
+        setUploadingIndex(i);
+        console.log(`[NewPost] Uploading media ${i + 1}/${mediaList.length}:`, item.mediaType, item.fileName);
+        await uploadFile(item, BACKEND_URL, post.id);
+        console.log(`[NewPost] Media ${i + 1}/${mediaList.length} uploaded`);
       }
+      setUploadingIndex(null);
 
       // Set preview state and start AI generation
       setPreviewState({ postId: post.id });
@@ -214,6 +225,7 @@ export default function NewPostScreen() {
     } catch (err: any) {
       console.error("[NewPost] Post error:", err);
       setIsLoading(false);
+      setUploadingIndex(null);
       Alert.alert("Fehler", err?.message || "Beitrag konnte nicht veröffentlicht werden");
       return;
     }
@@ -264,6 +276,7 @@ export default function NewPostScreen() {
   if (previewState !== null) {
     const publishLabel = isPublishing ? "Wird publiziert..." : "Publizieren";
     const generatingLabel = "KI schreibt deine Geschichte...";
+    const hasMedia = mediaList.length > 0;
 
     return (
       <KeyboardAvoidingView
@@ -455,8 +468,8 @@ export default function NewPostScreen() {
                   />
                 </View>
 
-                {/* Media preview */}
-                {media && (
+                {/* Media preview grid */}
+                {hasMedia && (
                   <View>
                     <Text
                       style={{
@@ -470,41 +483,52 @@ export default function NewPostScreen() {
                     >
                       Medien
                     </Text>
-                    <View style={{ position: "relative", alignSelf: "flex-start" }}>
-                      <Image
-                        source={{ uri: media.uri }}
-                        style={{ width: 160, height: 160, borderRadius: 14 }}
-                        contentFit="cover"
-                      />
-                      {media.mediaType === "video" && (
-                        <View
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            borderRadius: 14,
-                            backgroundColor: "rgba(0,0,0,0.25)",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 20,
-                              backgroundColor: "rgba(0,0,0,0.5)",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Play size={20} color="#FFFFFF" fill="#FFFFFF" />
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 8 }}
+                    >
+                      {mediaList.map((item, idx) => {
+                        const isVideo = item.mediaType === "video";
+                        return (
+                          <View key={idx} style={{ position: "relative" }}>
+                            <Image
+                              source={{ uri: item.uri }}
+                              style={{ width: 120, height: 120, borderRadius: 10 }}
+                              contentFit="cover"
+                            />
+                            {isVideo && (
+                              <View
+                                style={{
+                                  position: "absolute",
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  borderRadius: 10,
+                                  backgroundColor: "rgba(0,0,0,0.25)",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <View
+                                  style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 18,
+                                    backgroundColor: "rgba(0,0,0,0.5)",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
+                                </View>
+                              </View>
+                            )}
                           </View>
-                        </View>
-                      )}
-                    </View>
+                        );
+                      })}
+                    </ScrollView>
                   </View>
                 )}
               </>
@@ -518,6 +542,13 @@ export default function NewPostScreen() {
   }
 
   // ─── Compose screen ───────────────────────────────────────────────────────
+  const mediaCount = mediaList.length;
+  const mediaCountLabel = mediaCount > 1 ? `${mediaCount} Medien` : "";
+  const uploadProgressLabel =
+    uploadingIndex !== null
+      ? `Lade hoch ${uploadingIndex + 1}/${mediaList.length}...`
+      : "Posten";
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: COLORS.background }}
@@ -584,7 +615,7 @@ export default function NewPostScreen() {
               fontWeight: "700",
             }}
           >
-            Posten
+            {uploadProgressLabel}
           </Text>
         </AnimatedPressable>
       </View>
@@ -622,7 +653,7 @@ export default function NewPostScreen() {
           />
 
           {/* Hint text — only visible when nothing has been entered yet */}
-          {text.trim().length === 0 && media === null && (
+          {text.trim().length === 0 && mediaList.length === 0 && (
             <Text
               style={{
                 fontSize: 13,
@@ -634,58 +665,83 @@ export default function NewPostScreen() {
             </Text>
           )}
 
-          {/* Media preview */}
-          {media && (
-            <View style={{ position: "relative", alignSelf: "flex-start" }}>
-              <Image
-                source={{ uri: media.uri }}
-                style={{ width: 160, height: 160, borderRadius: 14 }}
-                contentFit="cover"
-              />
-              {media.mediaType === "video" && (
-                <View
+          {/* Media preview grid */}
+          {mediaList.length > 0 && (
+            <View>
+              {mediaCount > 1 && (
+                <Text
                   style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    borderRadius: 14,
-                    backgroundColor: "rgba(0,0,0,0.25)",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    fontSize: 12,
+                    color: COLORS.textSecondary,
+                    fontWeight: "600",
+                    marginBottom: 8,
                   }}
                 >
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      backgroundColor: "rgba(0,0,0,0.5)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Play size={20} color="#FFFFFF" fill="#FFFFFF" />
-                  </View>
-                </View>
+                  {mediaCountLabel}
+                </Text>
               )}
-              <AnimatedPressable
-                onPress={handleRemoveMedia}
-                style={{
-                  position: "absolute",
-                  top: -8,
-                  right: -8,
-                  width: 26,
-                  height: 26,
-                  borderRadius: 13,
-                  backgroundColor: COLORS.danger,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
               >
-                <X size={14} color="#FFFFFF" />
-              </AnimatedPressable>
+                {mediaList.map((item, idx) => {
+                  const isVideo = item.mediaType === "video";
+                  return (
+                    <View key={idx} style={{ position: "relative" }}>
+                      <Image
+                        source={{ uri: item.uri }}
+                        style={{ width: 100, height: 100, borderRadius: 10 }}
+                        contentFit="cover"
+                      />
+                      {isVideo && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            borderRadius: 10,
+                            backgroundColor: "rgba(0,0,0,0.25)",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: "rgba(0,0,0,0.5)",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+                          </View>
+                        </View>
+                      )}
+                      <AnimatedPressable
+                        onPress={() => handleRemoveMedia(idx)}
+                        style={{
+                          position: "absolute",
+                          top: -6,
+                          right: -6,
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: COLORS.danger,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <X size={12} color="#FFFFFF" />
+                      </AnimatedPressable>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
         </ScrollView>
@@ -705,7 +761,7 @@ export default function NewPostScreen() {
         }}
       >
         <AnimatedPressable
-          onPress={handlePickImage}
+          onPress={handlePickMedia}
           style={{
             width: 44,
             height: 44,
@@ -715,21 +771,7 @@ export default function NewPostScreen() {
             justifyContent: "center",
           }}
         >
-          <Camera size={20} color={COLORS.primary} />
-        </AnimatedPressable>
-
-        <AnimatedPressable
-          onPress={handlePickVideo}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: COLORS.surfaceSecondary,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <VideoIcon size={20} color={COLORS.primary} />
+          <Images size={20} color={COLORS.primary} />
         </AnimatedPressable>
 
         <AnimatedPressable
