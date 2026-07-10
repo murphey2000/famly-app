@@ -9,7 +9,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Clock } from "lucide-react-native";
 import { COLORS } from "@/constants/Colors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -24,6 +24,16 @@ import { useFamily } from "@/hooks/useFamily";
 import { useInfinitePosts } from "@/hooks/useInfinitePosts";
 import type { FamilyMember, FamilyStats, TodayMemory, FeedItemBirthday } from "@/types";
 import type { ImageSourcePropType } from "react-native";
+
+interface UpcomingAnniversary {
+  id: string;
+  family_id: string;
+  title: string;
+  date: string;
+  created_by: string;
+  created_at: string;
+  days_until: number;
+}
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
@@ -216,6 +226,56 @@ function MemoryBanner({ memory }: { memory: TodayMemory }) {
         />
       )}
     </AnimatedPressable>
+  );
+}
+
+function AnniversaryCard({ anniversary }: { anniversary: UpcomingAnniversary }) {
+  const daysUntil = anniversary.days_until;
+  let statusText: string;
+  if (daysUntil === 0) {
+    statusText = "heute";
+  } else if (daysUntil === 1) {
+    statusText = "in 1 Tag";
+  } else {
+    statusText = "in " + daysUntil + " Tagen";
+  }
+
+  return (
+    <View
+      style={{
+        backgroundColor: "#FFF8E7",
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#FFD166",
+        padding: 14,
+        marginHorizontal: 16,
+        marginBottom: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          backgroundColor: "rgba(255, 209, 102, 0.3)",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ fontSize: 22 }}>🎉</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: "700", color: "#7A4F00" }}>
+          {anniversary.title}
+        </Text>
+        <Text style={{ fontSize: 13, fontWeight: "600", color: "#B07800", marginTop: 2 }}>
+          {statusText}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -418,6 +478,20 @@ export default function FeedScreen() {
   const familyQuery = useFamily();
   const infinitePostsQuery = useInfinitePosts(selectedAuthorId);
 
+  const familyId = familyQuery.data?.id;
+
+  const upcomingAnniversariesQuery = useQuery({
+    queryKey: ["anniversaries", "upcoming", familyId],
+    queryFn: async () => {
+      console.log("[Feed] GET /api/anniversaries/upcoming");
+      const data = await apiGet<{ anniversaries: UpcomingAnniversary[] }>("/api/anniversaries/upcoming");
+      console.log("[Feed] Upcoming anniversaries loaded:", data.anniversaries?.length ?? 0);
+      return data.anniversaries ?? [];
+    },
+    enabled: !!familyId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
     const timer = setTimeout(() => {
       console.log("[Feed] Loading timeout reached, forcing content render");
@@ -437,6 +511,10 @@ export default function FeedScreen() {
     : null;
 
   const birthdayItems = feedItems.filter((item): item is FeedItemBirthday => item.kind === "birthday");
+
+  const upcomingAnniversaries = (upcomingAnniversariesQuery.data ?? []).filter(
+    (a) => a.days_until <= 7
+  );
 
   const loading = ((feedQuery.isPending && !feedQuery.data) || (familyQuery.isPending && !familyQuery.data)) && !timedOut;
   const error = feedQuery.isError || familyQuery.isError ? "Fehler beim Laden. Bitte versuche es erneut." : null;
@@ -466,7 +544,13 @@ export default function FeedScreen() {
     setRefreshing(true);
     queryClient.invalidateQueries({ queryKey: ["posts", "infinite"] });
     queryClient.invalidateQueries({ queryKey: ["feed"] });
-    Promise.all([infinitePostsQuery.refetch(), feedQuery.refetch(), familyQuery.refetch()]).finally(() => {
+    queryClient.invalidateQueries({ queryKey: ["anniversaries", "upcoming"] });
+    Promise.all([
+      infinitePostsQuery.refetch(),
+      feedQuery.refetch(),
+      familyQuery.refetch(),
+      upcomingAnniversariesQuery.refetch(),
+    ]).finally(() => {
       setRefreshing(false);
     });
   };
@@ -510,6 +594,11 @@ export default function FeedScreen() {
 
       {/* Today's Memory Banner */}
       {todayMemory && <MemoryBanner memory={todayMemory} />}
+
+      {/* Upcoming Anniversaries */}
+      {upcomingAnniversaries.map((anniversary) => (
+        <AnniversaryCard key={anniversary.id} anniversary={anniversary} />
+      ))}
 
       {/* Stats row — only when posts exist */}
       {posts.length > 0 && stats && <StatsRow stats={stats} />}
