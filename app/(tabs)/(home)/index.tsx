@@ -78,8 +78,7 @@ const POLAROID_ROTATIONS = ["-6deg", "2deg", "8deg"] as const;
 function PolaroidStack({ posts, topPadding }: { posts: Post[]; topPadding: number }) {
   const photoPosts = posts
     .filter((p) => (p.media ?? []).some((m) => m.type === "photo"))
-    .slice(-3)
-    .reverse();
+    .slice(0, 3);
 
   const frames: { photoUrl: string | null; caption: string }[] = [];
   for (let i = 0; i < 3; i++) {
