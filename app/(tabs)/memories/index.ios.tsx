@@ -16,7 +16,8 @@ import { usePosts } from "@/hooks/usePosts";
 import { useFamily } from "@/hooks/useFamily";
 import { AuthorAvatar } from "@/components/AuthorAvatar";
 import { useTodayMemory } from "@/hooks/useTodayMemory";
-import { formatRelativeDate, getYear, getMonthName } from "@/utils/dateUtils";
+import { formatRelativeDate, getYear, getMonthName, getMonthNumber } from "@/utils/dateUtils";
+import { useFilter } from "@/contexts/FilterContext";
 import { SkeletonLine } from "@/components/SkeletonLine";
 import { InspirationChips } from "@/components/InspirationChips";
 import type { Post, TodayMemory, FamilyMember } from "@/types";
@@ -360,7 +361,7 @@ export default function MemoriesScreen() {
   const insets = useSafeAreaInsets();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedAuthorId, setSelectedAuthorId] = useState<string | undefined>(undefined);
+  const { selectedAuthorId, setSelectedAuthorId } = useFilter();
 
   const postsQuery = usePosts(selectedAuthorId);
   const { data: family } = useFamily();
@@ -395,7 +396,9 @@ export default function MemoriesScreen() {
     return acc;
   }, {});
 
-  const monthGroups = Object.entries(groupedByMonth).map(([month, posts]) => ({ month, posts }));
+  const monthGroups = Object.entries(groupedByMonth)
+    .map(([month, posts]) => ({ month, posts, monthNum: getMonthNumber(posts[0].created_at) }))
+    .sort((a, b) => b.monthNum - a.monthNum);
 
   const hasNoPosts = !loading && allPosts.length === 0;
   const hasPostsButNoneForYear = !loading && allPosts.length > 0 && filteredPosts.length === 0;
