@@ -89,3 +89,12 @@ export const newsletters = pgTable('newsletters', {
 }, (table) => [
   unique('newsletters_unique').on(table.family_id, table.month, table.year),
 ]);
+
+export const family_anniversaries = pgTable('family_anniversaries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  family_id: uuid('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  date: text('date').notNull(),
+  created_by: text('created_by').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
