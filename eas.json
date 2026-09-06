@@ -2,7 +2,10 @@
   "build": {
     "preview": {
       "distribution": "internal",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://7se5q84f6y2fxh3m28gyshca4wub75wv.app.specular.dev"
+      }
     },
     "production": {
       "autoIncrement": true
