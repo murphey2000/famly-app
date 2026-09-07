@@ -75,13 +75,21 @@ export const authClient = createAuthClient({
         console.log("[auth] Could not parse response body for token fallback");
       }
     },
+    // credentials: 'include' is a browser-only concept — keep it web-only
     ...(Platform.OS === "web" && {
       credentials: "include",
-      auth: {
-        type: "Bearer" as const,
-        token: () => localStorage.getItem(BEARER_TOKEN_KEY) || "",
-      },
     }),
+    // Attach the Bearer token on ALL platforms so Android/iOS requests are authenticated
+    auth: {
+      type: "Bearer" as const,
+      token: () => {
+        if (Platform.OS === "web") {
+          return localStorage.getItem(BEARER_TOKEN_KEY) || "";
+        }
+        // SecureStore.getItem is the synchronous variant available in expo-secure-store
+        return SecureStore.getItem(BEARER_TOKEN_KEY) || "";
+      },
+    },
   },
 });
 
